@@ -4,6 +4,8 @@
 
 Welcome to **LiveRecall**, an open-source alternative to Microsoft's Recall, designed with a strong emphasis on user privacy and data security. This document outlines our commitment to ensuring your data remains secure and private at all times.
 
+**It doesn't Need Internet and if there is a connection, no data leaves your computer **
+
 ## Privacy
 
 ### Local Execution
