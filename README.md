@@ -5,6 +5,9 @@ Welcome to **LiveRecall**, the open-source alternative to Microsoft's Recall. Li
 Get an idea of what Microsoft Recall is -
 [Tweet](https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19) 
 
+[Security risks of Recall AI by Microsoft](https://github.com/xaitax/Total Recall)
+
+
 ## Overview
 
 ### What Does LiveRecall Do?
