@@ -78,7 +78,7 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 6. **Encryption Password:**
 
    - Enter a simple password for encryption and decryption.
-     ![LiveRecall Password](Images/Screenshot%202024-06-13%20083549.png)
+     ![LiveRecall Password](Images/Screenshot%202024-06-13%20082759.png)
 
    - **Important**: This password is not stored for security reasons, so make sure to remember it.
    - An enhanced encryption method is coming soon.
