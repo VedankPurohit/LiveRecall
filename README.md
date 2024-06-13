@@ -2,7 +2,8 @@
 
 Welcome to **LiveRecall**, the open-source alternative to Microsoft's Recall. LiveRecall captures snapshots of your screen and allows you to recall them using natural language queries, leveraging semantic search technology. For added security, all images are encrypted.
 
-Get an idea of what Microsoft Recall is - https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19 
+Get an idea of what Microsoft Recall is -
+![Tweet](https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19) 
 
 ## Overview
 
