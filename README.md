@@ -97,7 +97,7 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 
 ## Privacy and Security
 
-For detailed information on privacy and security of this project, please refer to the [Privacy and Security](PRIVACY_AND_SECURITY.md) document.
+For detailed information on privacy and security of this project, please refer to the [Privacy and Security](https://github.com/VedankPurohit/LiveRecall/blob/main/Privacy%20and%20Security.md) document.
 
 ## Upcoming Features
 
