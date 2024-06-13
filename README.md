@@ -11,7 +11,7 @@ LiveRecall is designed to help you easily find and recall specific moments you�
 - You saw a blue shirt online but can’t remember where.
 - You received a meme or message but can’t recall who sent it or on which platform.
 
-![LiveRecall Interface](Images/Screenshot%2024-06-13%083549.png)
+![LiveRecall Infrance](Images/Screenshot%202024-06-13%20083549.png)
 
 LiveRecall addresses these needs by capturing screenshots whenever a change is detected on your screen and at regular intervals. This data is then used for recall, allowing you to describe what you’re looking for in natural language, and the appropriate image will be shown.
 
@@ -74,10 +74,11 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 
    ![LiveRecall Interface](Images/Screenshot%202024-06-13%20082741.png)
 
+
 6. **Encryption Password:**
 
    - Enter a simple password for encryption and decryption.
-     ![LiveRecall Password](Images/Screenshot%2024-06-13%082759.png)
+     ![LiveRecall Password](Images/Screenshot%202024-06-13%20083549.png)
 
    - **Important**: This password is not stored for security reasons, so make sure to remember it.
    - An enhanced encryption method is coming soon.
