@@ -39,7 +39,7 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 1. **Clone the repository or download the code directly:**
 
    ```bash
-   git clone https://github.com/yourusername/LiveRecall.git
+   git clone https://github.com/VedankPurohit/LiveRecall.git
    ```
 
 2. **Navigate to the project directory:**
@@ -114,7 +114,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you have any questions, feel free to reach out:
 
-- GitHub: [yourusername](https://github.com/yourusername)
-- Email: yourname@example.com
+- GitHub: [VedankPurohit](https://github.com/VedankPurohit)
 
 Enjoy using LiveRecall!
+And if you like it, give it an star
