@@ -1,7 +1,5 @@
 import os
 
-import os
-
 def ListFiles(directory_path):
     try:
         items = os.listdir(directory_path)
