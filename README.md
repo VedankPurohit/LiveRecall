@@ -94,6 +94,11 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 
    Use the search bar to retrieve your screenshots using natural language queries.
 
+
+## Privacy and Security
+
+For detailed information on privacy and security of this project, please refer to the [Privacy and Security](PRIVACY_AND_SECURITY.md) document.
+
 ## Upcoming Features
 
 - Proper Database Support
