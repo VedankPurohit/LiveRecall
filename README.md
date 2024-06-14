@@ -3,10 +3,9 @@
 Welcome to **LiveRecall**, the open-source alternative to Microsoft's Recall. LiveRecall captures snapshots of your screen and allows you to recall them using natural language queries, leveraging semantic search technology. For added security, all images are encrypted.
 
 Get an idea of what Microsoft Recall is -
-[Tweet](https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19) 
+[Tweet](https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19)
 
 [Security risks of Recall AI by Microsoft](https://github.com/xaitax/TotalRecall)
-
 
 ## Overview
 
@@ -56,10 +55,16 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 
 3. **Run the setup script (only required the first time):**
 
-   On Windows:
+   On Windows
 
    ```bash
    setup.bat
+   ```
+
+   Cli - Python Must be installed
+
+   ```
+   pip install -r requirements.txt
    ```
 
    This process will take some time as it sets up the necessary environment and dependencies.
@@ -72,6 +77,12 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
    run.bat
    ```
 
+   Cli
+
+   ```
+   streamlit run app.py
+   ```
+
    The duration depends on your internet connection as all required models will be downloaded.
 
 5. **Access the web interface:**
@@ -79,7 +90,6 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
    After running `run.bat`, a URL will be displayed. Click on the URL to open the web interface. Once everything is loaded, you will see a screen similar to this:
 
    ![LiveRecall Interface](Images/Screenshot%202024-06-13%20082741.png)
-
 
 6. **Encryption Password:**
 
@@ -97,7 +107,6 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 8. **Search Snapshots:**
 
    Use the search bar to retrieve your screenshots using natural language queries.
-
 
 ## Privacy and Security
 
