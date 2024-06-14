@@ -105,13 +105,13 @@ def ThreadMain():
             previous_screenshot = Main(previous_screenshot, key=Key)
             if count > 10:
                 count = 1
-                Memory , Names = GetMemory()
-                JsonData.SaveJson("Data.json",Names,Memory)
+                Memory , Names,TimeLine = GetMemory()
+                JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
                 print("Saved")
         if Start == False and count > 0:
             count = 0
-            Memory , Names = GetMemory()
-            JsonData.SaveJson("Data.json",Names,Memory)
+            Memory , Names, TimeLine = GetMemory()
+            JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
             print("Saved")
 
 Threaded = threading.Thread(target=ThreadMain)

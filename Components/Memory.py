@@ -2,11 +2,13 @@ import Components.ClipMode as ClipMode
 import torch
 import time
 import Components.JsonData as JsonData
+def TimeField():
+    return time.strftime("%y%m%d%H%M%S")
 
 
-ImageNames, MemorySnapShot= JsonData.LoadJson("Data.json")
+ImageNames, MemorySnapShot, TimeLine = JsonData.LoadJson("Data.json")
 
-print(len(MemorySnapShot), len(ImageNames))
+print(len(MemorySnapShot), len(ImageNames), len(TimeLine))
 
 
 
@@ -14,6 +16,7 @@ def AddToMemory(Image):
     Embedding = ClipMode.ImgEmb(Image)
     MemorySnapShot.append(Embedding)
     ImageNames.append(Image)
+    TimeLine.append(TimeField())
     return True
 
 def AutoAddMemory(CaptureImage, cap, Timer, MaxBufferSize):
@@ -32,11 +35,12 @@ def AutoAddMemory(CaptureImage, cap, Timer, MaxBufferSize):
 
 
 def GetMemory():
-    return MemorySnapShot, ImageNames
+    return MemorySnapShot, ImageNames, TimeLine
 
 def ClearMemory():
     MemorySnapShot = []
     ImageNames = []
+    TimeLine = []
     return True
 
 def RetriveMemory(Embedding):

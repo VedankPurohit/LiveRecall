@@ -34,6 +34,6 @@ while __name__ == "__main__":
     for a in Ans:
         display_image(a)
     time.sleep(5)
-    MemorySnapshot, ImageName = GetMemory()
+    MemorySnapshot, ImageName, TimeLine = GetMemory()
     JsonData.SaveJson("Data.json",ImageName,MemorySnapshot)
 
