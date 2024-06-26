@@ -31,9 +31,12 @@ def main():
     directory_path = input("Enter the directory path: ")
     key = input("Enter the encryption key: ")
     files = ListFiles(directory_path)
-    print(files)
+    print(f"{len(files)} Total files")
+    count = 0
     for a in files:
         EncryptDecryptImage(a, key)
+        count += 1
+    print(f"Converted {count} Files")
 
 if __name__ == "__main__":
     main()

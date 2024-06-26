@@ -2,6 +2,7 @@ import streamlit as st
 from Components.Crypt import EncryptDecryptImage
 import CaptureStart
 import os
+#from Components.JsonData import GetPropTime
 st.set_page_config(page_title="Recall", page_icon="")
 
 
@@ -37,13 +38,13 @@ with tab1:
     st.title("Recall")
     Col1 , Col2 = st.columns(2, gap="small")
     with Col1:
-        if st.button("Start", type="secondary") and CaptureStart.Key != "":
+        if CaptureStart.Key != "" and st.button("Start", type="secondary") and CaptureStart.Key != "":
             CaptureStart.Start = True
             if CaptureStart.Threaded.is_alive() == False:
                 CaptureStart.Threaded.start()
         
     with Col2:
-        if st.button("Stop", type="primary"):
+        if CaptureStart.Key != "" and st.button("Stop", type="primary"):
             CaptureStart.Start = False
 
 
@@ -61,7 +62,7 @@ with tab1:
                 with st.container():
                     for i, image_location in enumerate(image_locations):
                         with col1 if i % 3 == 0 else col2 if i % 3 == 1 else col3:
-                            st.image(image_location,caption=image_location.replace("Temp\screenshot_","").replace(".png",""), use_column_width  = "auto")
+                            st.image(image_location,caption=image_location.replace("Temp\screenshot_","").replace(".png","").replace(".jpg", ""), use_column_width  = "auto")
                 RemoveImages()
 
                 

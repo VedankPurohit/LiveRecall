@@ -1,0 +1,9 @@
+*.jpg
+*.png
+**/__pycache__/
+Compressison Test.py
+Data.json
+package-lock.json
+test.py
+Components/Ocr.py
+Components/VisualProcessing.py

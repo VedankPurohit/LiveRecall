@@ -36,18 +36,30 @@ def CalculateSsim(img1, img2):
     score, _ = Ssim(gray1, gray2, full=True)
     return score
 
-def GetNextFilename():
+
+def GetNextFilename(extension='.png'):
     existing_files = os.listdir(SaveDirectory)
     screenshot_numbers = [int(f.split('_')[1].split('.')[0]) for f in existing_files if f.startswith('screenshot_') and f.split('_')[1].split('.')[0].isdigit()]
     if not screenshot_numbers:
-        return 'screenshot_1.png'
+        return f'screenshot_1{extension}'
     next_number = max(screenshot_numbers) + 1
-    return f'screenshot_{next_number}.png'
+    return f'screenshot_{next_number}{extension}'
+
 
 def SaveScreenshot(image,SaveDirectory = 'CapturedData'):
     filename = GetNextFilename()
     filepath = os.path.join(SaveDirectory, filename)
     image.save(filepath)
+    return filename
+
+def SaveScreenshotJpg(image, SaveDirectory='CapturedData', quality=85):
+    if not os.path.exists(SaveDirectory):
+        os.makedirs(SaveDirectory)
+    filename = GetNextFilename('.jpg')
+    filepath = os.path.join(SaveDirectory, filename)
+    if image.mode == 'RGBA':
+        image = image.convert('RGB')
+    image.save(filepath, 'JPEG', quality=quality)
     return filename
 
 def Main(previous_screenshot, key):
@@ -78,7 +90,7 @@ def Main(previous_screenshot, key):
                 print("Screen Didn't change")
             else:
                 print("Stable for long")
-                saved_filename = SaveScreenshot(current_screenshot)
+                saved_filename = SaveScreenshotJpg(current_screenshot)
 
                 print(f'Screenshot saved: {saved_filename}')
                 AddToMemory(os.path.join(SaveDirectory, saved_filename))
@@ -95,24 +107,29 @@ global Key
 Key = ""
 
 def ThreadMain():
-    previous_screenshot = ImageToArray(GrabScreen())
-    last_capture_time = time.time()
-    count = 0
-    print("Started")
-    while True:
-        while Start:
-            count += 1
-            previous_screenshot = Main(previous_screenshot, key=Key)
-            if count > 10:
-                count = 1
-                Memory , Names,TimeLine = GetMemory()
+    try:
+        previous_screenshot = ImageToArray(GrabScreen())
+        last_capture_time = time.time()
+        count = 0
+        print("Started")
+        while True:
+            while Start:
+                count += 1
+                previous_screenshot = Main(previous_screenshot, key=Key)
+                if count > 10:
+                    count = 1
+                    Memory , Names,TimeLine = GetMemory()
+                    JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
+                    print("Saved")
+            if Start == False and count > 0:
+                count = 0
+                Memory , Names, TimeLine = GetMemory()
                 JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
                 print("Saved")
-        if Start == False and count > 0:
-            count = 0
-            Memory , Names, TimeLine = GetMemory()
-            JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
-            print("Saved")
+    except Exception as e:
+        print(e)
+        time.sleep(5)
+        ThreadMain()
 
 Threaded = threading.Thread(target=ThreadMain)
 #Threaded.start()

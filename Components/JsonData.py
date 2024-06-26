@@ -6,6 +6,18 @@ import time
 def TimeField():
     return time.strftime("%y%m%d%H%M%S")
 
+def GetPropTime(time_str):
+    year = "20" + time_str[0:2]
+    month = int(time_str[2:4])
+    day = time_str[4:6]
+    hour = time_str[6:8]
+    minute = time_str[8:10]
+    second = time_str[10:12]
+    
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    month_name = months[month - 1]
+    
+    return f"{day}th {month_name} {year} - {hour}:{minute} {second}s"
 
 
 

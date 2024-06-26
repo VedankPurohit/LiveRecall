@@ -55,7 +55,7 @@ The Decision to not add a databse was done to remove friction. an oprtion to add
 
 3. **Run the setup script (only required the first time):**
 
-   On Windows
+   On Windows:
 
    ```bash
    setup.bat
