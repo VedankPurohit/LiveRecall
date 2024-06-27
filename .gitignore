@@ -7,3 +7,4 @@ package-lock.json
 test.py
 Components/Ocr.py
 Components/VisualProcessing.py
+/flash-attention
