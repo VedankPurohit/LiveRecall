@@ -9,9 +9,9 @@ import os
 import threading
 
 global Threshold 
-Threshold = 0.95
+Threshold = 0.85 # prev 95 Bigger val easy to start save
 global ThresholdSave 
-ThresholdSave = 0.85
+ThresholdSave = 0.75 # smaller value easy to actualy save - prev 85
 global ScreenshotInterval
 ScreenshotInterval = 2
 
@@ -52,7 +52,7 @@ def SaveScreenshot(image,SaveDirectory = 'CapturedData'):
     image.save(filepath)
     return filename
 
-def SaveScreenshotJpg(image, SaveDirectory='CapturedData', quality=85):
+def SaveScreenshotJpg(image, SaveDirectory='CapturedData', quality=90):
     if not os.path.exists(SaveDirectory):
         os.makedirs(SaveDirectory)
     filename = GetNextFilename('.jpg')

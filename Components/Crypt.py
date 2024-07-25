@@ -29,6 +29,8 @@ def EncryptDecryptImage(image_path, key, save_path= ""):
 def main():
     print("Welcome to Image Encryption and Decryption!")
     directory_path = input("Enter the directory path: ")
+    if directory_path == "":
+        directory_path = "CapturedData"
     key = input("Enter the encryption key: ")
     files = ListFiles(directory_path)
     print(f"{len(files)} Total files")
@@ -36,6 +38,8 @@ def main():
     for a in files:
         EncryptDecryptImage(a, key)
         count += 1
+        if count%200 == 0:
+            print(f"Converted {count} Files")
     print(f"Converted {count} Files")
 
 if __name__ == "__main__":
