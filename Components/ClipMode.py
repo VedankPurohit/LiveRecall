@@ -1,10 +1,10 @@
 from sentence_transformers import SentenceTransformer, util
 from PIL import Image
 
-#model = SentenceTransformer('clip-ViT-B-32')
+# model = SentenceTransformer('clip-ViT-B-32')
 model = SentenceTransformer('clip-ViT-L-14')
 
-def TextEmb(Text, model = model):
+def TextEmb(Text, model=model):
     text_emb = model.encode(Text)
     return text_emb
 

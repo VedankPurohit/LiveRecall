@@ -18,10 +18,9 @@ def process_png_files(folder_path):
         if file_name.lower().endswith('.png') or file_name.lower().endswith('.jpg'):
             file_path = os.path.join(folder_path, file_name)
             print(file_path)
-            count+= 1
+            count += 1
             AddToMemory(file_path)
     print(count)
-
 
 
 process_png_files(r'CapturedData')
@@ -35,5 +34,5 @@ while __name__ == "__main__":
         display_image(a)
     time.sleep(5)
     MemorySnapshot, ImageName, TimeLine = GetMemory()
-    JsonData.SaveJson("Data.json",ImageName,MemorySnapshot)
+    JsonData.SaveJson("Data.json", ImageName, MemorySnapshot)
 

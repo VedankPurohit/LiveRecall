@@ -1,0 +1,9 @@
+[0812/143436.827:ERROR:arc_exe_main.cc(67)] Failed to load Arc DLL from C:\Program Files\WindowsApps\TheBrowserCompany.Arc_1.14.0.41781_x64__ttt1ap7aakyb4\Arc.dll
+[0903/104716.028:ERROR:crashpad_client_win.cc(810)] not connected
+[0121/171446.782:ERROR:crashpad_client_win.cc(810)] not connected
+[0121/171930.960:ERROR:crashpad_client_win.cc(810)] not connected
+[0121/171932.516:ERROR:crashpad_client_win.cc(810)] not connected
+[0301/232135.654:ERROR:crashpad_client_win.cc(810)] not connected
+[0301/232144.604:ERROR:crashpad_client_win.cc(810)] not connected
+[0303/004525.196:ERROR:crashpad_client_win.cc(810)] not connected
+[0303/004527.275:ERROR:crashpad_client_win.cc(810)] not connected

@@ -59,6 +59,20 @@ def RetriveMemoryMax(Embedding, Number):
             print(Index.item())
             Lis.append(ImageNames[Index.item()])
 
+    if len(Lis) == 0:
+        print("List returned 0?")
+        Semilarity = ClipMode.CosSemilarity(Embedding, MemorySnapShot)
+        values, Indexs = torch.topk(Semilarity, Number)
+        print(Indexs)
+        Lis = []
+        for Index in Indexs[0]:
+            if isinstance(Index.item(), int):
+                print(Index.item())
+                Lis.append(ImageNames[Index.item()])
+
+    print("Retrived images count : ", + len(Lis))
+    print(Lis)
+
     return Lis, Semilarity
 
 

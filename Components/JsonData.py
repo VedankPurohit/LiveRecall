@@ -44,7 +44,7 @@ def LoadJson(file_path):
         print(f"File '{file_path}' does not exist.")
     return ImageNames, ListOfVectors, TimeLine
 
-def SaveJson(file_path,ImageNames,ListOfVectors, TimeLine):
+def SaveJson2(file_path,ImageNames,ListOfVectors, TimeLine):
     data_to_save = [{"FileName": name, "ImgEmbeding": embedding.tolist(), "TimeLine": Time} for name, embedding, Time in zip(ImageNames, ListOfVectors,TimeLine)]
     
     with open(file_path, 'w') as file:
@@ -54,3 +54,15 @@ def SaveJson(file_path,ImageNames,ListOfVectors, TimeLine):
 
 
 
+def SaveJson(file_path, ImageNames, ListOfVectors, TimeLine):
+    data_to_save = [{"FileName": name, "ImgEmbeding": embedding.tolist(), "TimeLine": Time} for name, embedding, Time in zip(ImageNames, ListOfVectors, TimeLine)]
+    
+    with open(file_path, 'w') as file:
+        file.write('[\n')
+        for i, entry in enumerate(data_to_save):
+            json.dump(entry, file)
+            if i < len(data_to_save) - 1:
+                file.write(',\n')  # Add a comma after each entry except the last one
+        file.write('\n]')
+        
+    print(f"Data saved to '{file_path}'.")
