@@ -32,7 +32,8 @@ def get_image(text):
     try:
 
         Emb = CaptureStart.ClipMode.TextEmb(text)
-        Lis, _ = CaptureStart.RetriveMemoryMax(Emb,6)
+        print("Extracted Embeddings")
+        Lis, _ = CaptureStart.RetriveMemoryMax(Emb,12)
         SavedLis = []
         for a in Lis:
             Save = a.replace("CapturedData", "Temp")
@@ -50,6 +51,7 @@ with tab1:
     Col1 , Col2 = st.columns(2, gap="small")
     with Col1:
         if CaptureStart.Key != "" and st.button("Start", type="secondary") and CaptureStart.Key != "":
+            # CaptureStart.ImportModels() ## Loding model only when needed
             CaptureStart.Start = True
             if CaptureStart.Threaded.is_alive() == False:
                 CaptureStart.Threaded.start()
@@ -64,6 +66,7 @@ with tab1:
         st.session_state.prev_search_term = ""
 
     if CaptureStart.Key != "" and (st.button("Search") or st.session_state.prev_search_term != search_term):
+        # CaptureStart.ImportModels() ## Loding model only when needed
         try:
             if search_term:
                 image_locations = get_image(search_term)

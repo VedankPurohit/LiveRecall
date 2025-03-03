@@ -5,6 +5,7 @@ from PIL import Image
 model = SentenceTransformer('clip-ViT-L-14')
 
 def TextEmb(Text, model=model):
+    
     text_emb = model.encode(Text)
     return text_emb
 

@@ -2,7 +2,12 @@ from PIL import ImageGrab
 import numpy as np
 import cv2
 from skimage.metrics import structural_similarity as Ssim
-from Components.Memory import AddToMemory, GetMemory, JsonData, ClipMode, RetriveMemoryMax
+# def ImportModels(): #makes inital startup a lot faster
+#     if ModelLoded == False:
+#         ModelLoded = True
+print("Loading Model....")
+from Components.Memory import AddToMemory, GetMemory, ClipMode, RetriveMemoryMax
+print("Model loaded")
 from Components.Crypt import EncryptDecryptImage 
 import time
 import os
@@ -19,6 +24,9 @@ global ThresholdSave
 ThresholdSave = 0.6 # had 0.75 now smaller value easy to actualy save - prev 85
 global ScreenshotInterval
 ScreenshotInterval = 2
+
+global ModelLoded
+ModelLoded = False
 
 def CaptureMode(key):
     """
@@ -182,38 +190,58 @@ def Main(previous_screenshot, key):
         return previous_screenshot
 
 global Start
-Start = False
+Start = False #
 global Key
 Key = ""
+
+# def ThreadMain():
+#     try:
+#         previous_screenshot = ImageToArray(GrabScreen())
+#         last_capture_time = time.time()
+#         count = 0
+#         print("Started")
+#         while True:
+#             while Start:
+#                 count += 1
+#                 previous_screenshot = Main(previous_screenshot, key=Key)
+#                 if count > 10:
+#                     count = 1
+#                     Memory , Names,TimeLine = GetMemory()
+#                     JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
+#                     print("Saved")
+#             if Start == False and count > 0:
+#                 count = 0
+#                 Memory , Names, TimeLine = GetMemory()
+#                 JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
+#                 print("Saved")
+#                 time.sleep(5)
+#     except Exception as e:
+#         print(e)
+#         time.sleep(5)
+#         ThreadMain()
+
+# Threaded = threading.Thread(target=ThreadMain)
+# #Threaded.start()
 
 def ThreadMain():
     try:
         previous_screenshot = ImageToArray(GrabScreen())
-        last_capture_time = time.time()
-        count = 0
         print("Started")
         while True:
             while Start:
-                count += 1
                 previous_screenshot = Main(previous_screenshot, key=Key)
-                if count > 10:
-                    count = 1
-                    Memory , Names,TimeLine = GetMemory()
-                    JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
-                    print("Saved")
-            if Start == False and count > 0:
-                count = 0
-                Memory , Names, TimeLine = GetMemory()
-                JsonData.SaveJson("Data.json",Names,Memory, TimeLine)
-                print("Saved")
+                # No need to manually save anything, database handles persistence
+                
+            if Start == False:
+                # Just sleep when not actively capturing
                 time.sleep(5)
     except Exception as e:
-        print(e)
+        print(f"Error in ThreadMain: {e}")
         time.sleep(5)
         ThreadMain()
 
 Threaded = threading.Thread(target=ThreadMain)
-#Threaded.start()
+# Threaded.start()
 
 
 
