@@ -204,9 +204,9 @@ def RetriveMemoryMax(embedding, number= 6): #Half from one Cos and other from Do
             
         print(f"Retrieved from Cos images count: {len(image_paths)}")
     
-        print("Cosin Similarity returned this - ")
-        for i in range(len(image_paths)):
-            print(f"{i} - Image path = {image_paths[i]}, Similarity = {similarities[i]} \n")
+        # print("Cosin Similarity returned this - ")
+        # for i in range(len(image_paths)):
+        #     print(f"{i} - Image path = {image_paths[i]}, Similarity = {similarities[i]} \n")
 
         
 
@@ -231,9 +231,9 @@ def RetriveMemoryMax(embedding, number= 6): #Half from one Cos and other from Do
                 
             print(f"Retrieved from Dot images count: {len(image_paths)}")
 
-            print("Dot Similarity returned this - ")
-            for i in range(len(image_paths2)):
-                print(f"{i} - Image path = {image_paths2[i]}, Similarity = {similarities2[i]} \n")
+            # print("Dot Similarity returned this - ")
+            # for i in range(len(image_paths2)):
+            #     print(f"{i} - Image path = {image_paths2[i]}, Similarity = {similarities2[i]} \n")
         
         for i in range(len(image_paths2)):
             if image_paths2[i] not in image_paths:

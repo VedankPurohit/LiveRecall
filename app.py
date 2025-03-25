@@ -1,9 +1,11 @@
 import streamlit as st
 from Components.Crypt import EncryptDecryptImage
 import CaptureStart
-import os
+import streamlit.components.v1 as components
+import numpy as np
+import base64, os
 #from Components.JsonData import GetPropTime
-st.set_page_config(page_title="Recall", page_icon="")
+st.set_page_config(page_title="Recall", page_icon="", layout="wide")
 
 
 with st.popover("Enter Your Key"):
@@ -24,16 +26,58 @@ def RemoveImages(directory= "Temp"):
         file_path = os.path.join(directory, file)
         if os.path.isfile(file_path):
             os.remove(file_path)
-            print(f"Removed file: {file_path}")
+            # print(f"Removed file: {file_path}")
     
 
-def get_image(text):
+def get_image(text, NegativeTexts="", NegativeImages = "", PositiveImages = "", NegTextWeight=1.0,NegativeImageWeight = 1.0, PositveImageWeight = 1.0):
     print("Getting Images")
-    try:
-
+    print(NegativeTexts, NegTextWeight)
+    # try:
+    if True:
         Emb = CaptureStart.ClipMode.TextEmb(text)
-        print("Extracted Embeddings")
-        Lis, _ = CaptureStart.RetriveMemoryMax(Emb,12)
+        print("Initial Emb created")
+        if SafeMode == True:
+            if SafeMode_weight == "Low":
+                Negweight = 0.6
+            elif SafeMode_weight == "LowMid":
+                Negweight = 0.8
+            elif SafeMode_weight == "Mid":
+                Negweight = 1.0
+            elif SafeMode_weight == "MidHigh":
+                Negweight = 1.2
+            elif SafeMode_weight == "High":
+                Negweight = 1.4
+            elif SafeMode_weight == "Very High":
+                Negweight = 1.8
+            elif SafeMode_weight == "Extream":
+                Negweight = 2.5
+            else:
+                Negweight = 0.4
+            NegativeTexts = ""
+            print(f"Safe mode is on - {text}, {NegativeTexts}, {Negweight}")
+            try:
+                Emb = CaptureStart.ClipMode.create_query_embedding(Emb= Emb, negative_texts=NegativeTexts,negTextWeight=Negweight, safeMode=True)
+            except Exception as e:
+                print(f"error - {e} happened in safe mode using create_query_embedding")
+        else: 
+            print(f"SafeMode is off")
+            try:
+                Emb = CaptureStart.ClipMode.create_query_embedding(Emb= Emb, negative_texts= NegativeTexts,
+                                                                    negative_images=NegativeImages, positive_images= PositiveImages,
+                                                                     negTextWeight=NegTextWeight, negImgWeight=NegativeImageWeight, posImgWeight=PositveImageWeight)
+            except Exception as e:
+                print(f"error - {e} happened in Normal mode using create_query_embedding")
+            
+        #     print("Extracted Embeddings With Negitives")
+        #     Negative = Negative.split(",") # For some reason if i have the final negative mode to be [''], The results are automaticaly safe
+        #     print(Negative,Negweight)
+        #     for i in range(len(Negative)):
+        #         Negative[i] = Negative[i].strip()
+        #     Emb = CaptureStart.ClipMode.create_query_embedding([text], Negative,negW=Negweight)
+        # print("Extracted Embeddings")
+        # print(Negative, Negweight)
+        Lis, Scores = CaptureStart.RetriveMemoryMax(Emb,80)
+        print(F"Found images {len(Lis)}")
         SavedLis = []
         for a in Lis:
             Save = a.replace("CapturedData", "Temp")
@@ -41,14 +85,15 @@ def get_image(text):
             SavedLis.append(Save)
         print("Images Got Successfully")
     
-        return SavedLis
-    except:
-        return []
+        return SavedLis, Scores  
+    # except Exception as e:
+    #     print("Error in get_image: \n", e)
+    #     return []
 
 tab1, tab2, tab3 = st.tabs(["Recall", "Delete", "Settings"])
 with tab1:
     st.title("Recall")
-    Col1 , Col2 = st.columns(2, gap="small")
+    Col1 , Col2, Col3, Col4 = st.columns(4, gap="small")
     with Col1:
         if CaptureStart.Key != "" and st.button("Start", type="secondary") and CaptureStart.Key != "":
             # CaptureStart.ImportModels() ## Loding model only when needed
@@ -59,40 +104,122 @@ with tab1:
     with Col2:
         if CaptureStart.Key != "" and st.button("Stop", type="primary"):
             CaptureStart.Start = False
+    
+    with Col3:
+        SafeMode = st.toggle(label="Safe Mode", value=True, key="SafeMode")
+        if "prev_safemode_bool" not in st.session_state:
+            st.session_state.prev_safemode_bool = True
+        # st.write(f"SafeMode is set to : {SafeMode}")
+
+    with Col4:
+        SafeMode_weight = st.selectbox(
+            "Set Modration Level",
+            key="SafeMode_weight",
+            options=["Low", "LowMid", "Mid", "MidHigh", "High", "Very High","Extream"],
+        )
+        if "prev_safemode_weight" not in st.session_state:
+            st.session_state.prev_safemode_weight = "Low"
+
+    Col6 , Col7 = st.columns(2, gap="medium")
+    with Col6:
+        search_term = st.text_input("Search:", key="search_term")  # Use a key for caching
+        if 'prev_search_term' not in st.session_state:
+            st.session_state.prev_search_term = ""
+
+    with Col7:
 
 
-    search_term = st.text_input("Search:", key="search_term")  # Use a key for caching
-    if 'prev_search_term' not in st.session_state:
-        st.session_state.prev_search_term = ""
+        with st.expander("Advanced Settings ⬇️", expanded=False):
+            st.markdown("### Customize Additional Options")
 
-    if CaptureStart.Key != "" and (st.button("Search") or st.session_state.prev_search_term != search_term):
-        # CaptureStart.ImportModels() ## Loding model only when needed
+            # Positive Images input and weight
+            pos_images = st.text_input("Positive Images", 
+                                       placeholder="Enter positive image Ids, separated by commas")
+            pos_img_weight = st.number_input("Positive Images Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
+
+            # Negative Images input and weight
+            neg_images = st.text_input("Negative Images", 
+                                       placeholder="Enter negative image Ids, separated by commas")
+            neg_img_weight = st.number_input("Negative Images Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
+
+            # Negative Texts input and weight
+            NegativeTerms = st.text_input("Negative Texts", 
+                                      placeholder="Enter negative texts, separated by commas")
+            neg_text_weight = st.number_input("Negative Texts Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
+            if "prev_Negative" not in st.session_state:
+                st.session_state.prev_Negative = ""
+
+
+    if CaptureStart.Key != "" and (st.button("Search") or st.session_state.prev_search_term != search_term or st.session_state.prev_Negative != NegativeTerms or st.session_state.prev_safemode_weight != SafeMode_weight):
+        # CaptureStart.ImportModels() ## Loading model only when needed
+        # After displaying them, remove from Temp
+        RemoveImages()
         try:
             if search_term:
-                image_locations = get_image(search_term)
+                # image_locations, SimiarityScores = get_image(search_term, NegativeTerms, neg_text_weight)
+                image_locations, SimiarityScores = get_image(text = search_term, NegativeTexts= NegativeTerms, NegativeImages = neg_images, PositiveImages = pos_images, NegTextWeight=neg_text_weight,NegativeImageWeight = neg_img_weight, PositveImageWeight = pos_img_weight)
+                print(len(image_locations))
                 if image_locations:
-                    st.success(f"Found {len(image_locations)} images!")
-    
-                    col1, col2, col3 = st.columns(3, gap="medium")
-                    with st.container():
-                        for i, image_location in enumerate(image_locations):
-                            with col1 if i % 3 == 0 else col2 if i % 3 == 1 else col3:
-                                st.image(image_location,caption=image_location.replace("Temp\screenshot_","").replace(".png","").replace(".jpg", ""), use_column_width  = "auto")
-                    RemoveImages()
-    
-                    
+                    try:
+                        st.success(f"Found {len(image_locations)} images!")
+
+                        # --- ONLY THIS PART CHANGED FOR IMAGE DISPLAY ---
+                        # Create a slider to cycle through the found images
+                        if len(image_locations) > 1:
+                            selected_index = st.slider(
+                                "Slide to view images",
+                                min_value=0,
+                                max_value=len(image_locations) - 1,
+                                value=0,
+                                help="Move the slider to switch between images."
+                            )
+                        else:
+                            selected_index = 0
+
+                        # Show the selected image
+                        st.image(
+                            image_locations[selected_index],
+                            use_column_width=True
+                        )
+
+                        # Optionally, show a caption
+                        st.caption(f"Image {selected_index + 1} of {len(image_locations)}")
+
+                        st.header("Gallery")
+                        col1, col2, col3 = st.columns(3, gap="medium")
+                        with st.container():
+                            for i, image_location in enumerate(image_locations):
+                                with col1 if i % 3 == 0 else col2 if i % 3 == 1 else col3:
+                                    # st.image(image_location,caption=f"Score - {SimiarityScores[i]} ")
+                                    st.image(image_location,caption=image_location.replace("Temp\screenshot_","").replace(".png","").replace(".jpg", "").replace("Temp\Snap -", ""), use_column_width  = "auto")
+                    except:
+                        st.warning("No images found for your search term.")
+
+
+
                 else:
                     st.warning("No images found for your search term.")
             else:
                 st.warning("Please enter a search term.")
         except:
-            st.warning("No images found for your search term. Or some Error occured, Im not too sure")
+            st.warning("No images found for your search term. Or some Error occurred, I'm not too sure")
+
 with tab2:
     st.title("Delete")
     st.write("comming soon...")
 
 with tab3:
     st.title("Settings")
+    SafeMode_weight = st.slider(
+        "Slide to set SafeMode Weight",
+        min_value=-1.0,
+        max_value=2.5,
+        value=0.8,
+        help="Move the slider to change SafeMode Weight.",
+        step=0.05
+    )
+
+
     mode_descriptions = {
         "Normal": "Balanced settings for everyday use",
         "Games": "Less frequent captures for gaming sessions",

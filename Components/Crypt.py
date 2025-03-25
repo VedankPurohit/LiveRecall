@@ -16,7 +16,7 @@ def EncryptDecryptImage(image_path, key, save_path= ""):
     if key == "DevMode": # For testing purposes, No encription will be done, the image will be saved as is DO NOT USE FOR NORMAL USAGE
         if save_path == "":
             save_path = image_path
-        print("DevMode Activated, No Security")
+        # print("DevMode Activated, No Security")
         with open(image_path, 'rb') as image_file:
             image_data = image_file.read()
         with open(save_path, 'wb') as image_file:
