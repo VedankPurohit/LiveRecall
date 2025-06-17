@@ -99,7 +99,7 @@ def CaptureMode(key):
         ThresholdSave = 0.6 
         ScreenshotInterval = 2
         
-    print( "We are now in: " + key + " Mode")
+    # print( "We are now in: " + key + " Mode")
 
 
 SaveDirectory = 'CapturedData'
