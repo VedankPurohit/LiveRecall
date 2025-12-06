@@ -324,7 +324,7 @@ with tab3:
         st.divider()
 
         st.subheader("Capture Settings")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             new_interval = st.number_input(
@@ -345,12 +345,23 @@ with tab3:
                 help="Higher = less sensitive (fewer captures)"
             )
 
+        with col3:
+            new_quality = st.slider(
+                "Image Quality",
+                min_value=50,
+                max_value=100,
+                value=int(capture_config.get("quality", 95)),
+                step=5,
+                help="JPEG quality (higher = better quality, larger files)"
+            )
+
         if st.button("Save Capture Settings"):
             result = requests.put(
                 f"{API_BASE}/config",
                 json={
                     "capture_interval": new_interval,
                     "capture_threshold": new_threshold,
+                    "capture_quality": new_quality,
                 }
             ).json()
 

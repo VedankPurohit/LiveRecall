@@ -279,6 +279,7 @@ class ConfigUpdateRequest(BaseModel):
     capture_mode: Optional[CaptureMode] = None
     capture_interval: Optional[float] = Field(None, ge=0.5, le=60.0)
     capture_threshold: Optional[float] = Field(None, ge=0.5, le=0.99)
+    capture_quality: Optional[int] = Field(None, ge=50, le=100)
     safe_mode_enabled: Optional[bool] = None
     safe_mode_level: Optional[SafeModeLevel] = None
     auto_unload_seconds: Optional[int] = Field(None, ge=0, le=3600)
