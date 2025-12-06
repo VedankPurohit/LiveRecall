@@ -41,7 +41,10 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
-    "httpx>=0.27.0",  # For FastAPI TestClient
+    "httpx>=0.27.0",
+]
+build = [
+    "pyinstaller>=6.0.0",
 ]
 
 [project.scripts]
@@ -49,13 +52,18 @@ liverecall = "main:main"
 liverecall-tray = "tray.app:run_tray"
 
 [tool.setuptools.packages.find]
-include = ["core*", "api*", "tray*", "tests*"]
-[project.optional-dependencies]
+include = ["core*", "api*", "tray*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
-    "httpx>=0.27.0",  # For FastAPI TestClient
+    "httpx>=0.27.0",
+    "pyinstaller>=6.0.0",
 ]
-
-[tool.setuptools.packages.find]
-include = ["core*", "api*", "tests*"]

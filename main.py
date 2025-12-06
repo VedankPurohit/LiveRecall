@@ -4,6 +4,22 @@ Launch API server or system tray application
 """
 import argparse
 import sys
+from pathlib import Path
+
+
+def is_frozen() -> bool:
+    """Check if running as a frozen PyInstaller app"""
+    return getattr(sys, 'frozen', False)
+
+
+def get_app_path() -> Path:
+    """Get the application root path (works for both development and frozen)"""
+    if is_frozen():
+        # PyInstaller: executable is in the app bundle
+        return Path(sys.executable).parent
+    else:
+        # Development: main.py location
+        return Path(__file__).parent
 
 
 def main():
@@ -52,11 +68,13 @@ Examples:
     if args.api_only:
         # Launch API server only
         import uvicorn
+        from api.main import app
+
         uvicorn.run(
-            "api.main:app",
+            app,
             host=args.host,
             port=args.port,
-            reload=args.reload,
+            reload=args.reload if not is_frozen() else False,
         )
     else:
         # Launch system tray (default)

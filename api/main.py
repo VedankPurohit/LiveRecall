@@ -3,13 +3,35 @@ LiveRecall API
 FastAPI application for controlling LiveRecall
 """
 import logging
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api.routes import recording, sync, search, screenshots, status, compression
 from core.database import db
+
+
+def _get_static_dir() -> Path:
+    """Get the path to static web UI files (works for both dev and frozen)"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller: look in _MEIPASS (temp extraction dir) or next to executable
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        # Try _MEIPASS/web/out first, then next to exe
+        if (base / "web" / "out").exists():
+            return base / "web" / "out"
+        return Path(sys.executable).parent / "web" / "out"
+    else:
+        # Development: relative to this file
+        return Path(__file__).parent.parent / "web" / "out"
+
+
+# Path to static web UI files (built Next.js)
+STATIC_DIR = _get_static_dir()
 
 # Configure logging - reduce uvicorn noise
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -84,16 +106,66 @@ app.include_router(screenshots.router, prefix="/api/v1")
 app.include_router(compression.router, prefix="/api/v1")
 
 
-# Root endpoint
-@app.get("/")
-async def root():
-    """API root - redirects to docs"""
-    return {
-        "name": "LiveRecall API",
-        "version": "2.0.0",
-        "docs": "/docs",
-        "status": "/api/v1/status",
-    }
+# Serve static web UI if available
+if STATIC_DIR.exists():
+    # Mount static files for assets (_next, images, etc.)
+    app.mount("/_next", StaticFiles(directory=STATIC_DIR / "_next"), name="next_static")
+
+    # Catch-all route for SPA - must be after API routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        """Serve static files or index.html for SPA routing"""
+        # Try to serve the exact file first
+        file_path = STATIC_DIR / full_path
+
+        # Handle trailing slash - look for index.html in directory
+        if file_path.is_dir():
+            index_file = file_path / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file)
+
+        # Serve exact file if it exists
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+
+        # Try with .html extension (Next.js static export)
+        html_file = STATIC_DIR / f"{full_path}.html"
+        if html_file.exists():
+            return FileResponse(html_file)
+
+        # Fall back to index.html for SPA routing
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+
+        # No static files available
+        return {"error": "Not found", "path": full_path}
+
+    # Root serves index.html
+    @app.get("/")
+    async def root():
+        """Serve web UI"""
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        return {
+            "name": "LiveRecall API",
+            "version": "2.0.0",
+            "docs": "/docs",
+            "web_ui": "Not built. Run 'npm run build' in web/ directory.",
+        }
+else:
+    # No static files - serve API info at root
+    @app.get("/")
+    async def root():
+        """API root - no web UI available"""
+        return {
+            "name": "LiveRecall API",
+            "version": "2.0.0",
+            "docs": "/docs",
+            "status": "/api/v1/status",
+            "web_ui": f"Not found at {STATIC_DIR}. Build with 'npm run build' in web/",
+        }
 
 
 # Run with: uvicorn api.main:app --reload --port 8742

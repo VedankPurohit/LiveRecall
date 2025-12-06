@@ -365,9 +365,13 @@ class Database:
             results = []
             for row in cur.fetchall():
                 result = dict(row)
-                # Convert distance to similarity (0-1 scale, 1 = most similar)
+                # Convert L2 distance to cosine similarity
+                # For normalized vectors: L2² = 2(1 - cosine_sim)
+                # So: cosine_sim = 1 - L2²/2
                 distance = result.pop("vec_distance", 0)
-                result["similarity"] = 1 / (1 + distance)
+                # Clamp to valid range (numerical precision issues)
+                cosine_sim = max(0.0, min(1.0, 1.0 - (distance ** 2) / 2))
+                result["similarity"] = cosine_sim
                 if result["similarity"] >= min_similarity:
                     results.append(result)
 

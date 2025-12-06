@@ -9,8 +9,8 @@ API_HOST = "127.0.0.1"
 API_PORT = 8742
 API_BASE_URL = f"http://{API_HOST}:{API_PORT}/api/v1"
 
-# Web UI settings
-WEB_UI_URL = "http://localhost:3000"
+# Web UI settings (served from FastAPI, same port as API)
+WEB_UI_URL = f"http://{API_HOST}:{API_PORT}"
 
 # Polling intervals (seconds)
 STATUS_POLL_INTERVAL = 2.0

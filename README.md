@@ -17,7 +17,7 @@
 
 - Python 3.10+
 - Node.js 18+ (for web UI)
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
+- [uv](https://github.com/astral-sh/uv) - Fast Python package manager
 
 ### Installation
 
@@ -26,7 +26,7 @@
 git clone https://github.com/VedankPurohit/LiveRecall.git
 cd LiveRecall
 
-# Install Python dependencies
+# Install Python dependencies (creates .venv automatically)
 uv sync
 
 # Install web UI dependencies
@@ -37,25 +37,41 @@ cd web && npm install && cd ..
 
 **Option 1: System Tray App** (recommended)
 ```bash
-python main.py
+uv run python main.py
 ```
 This launches the menu bar app which manages everything.
 
 **Option 2: API Server Only**
 ```bash
-python main.py --api-only
+uv run python main.py --api-only
 ```
 
 **Option 3: Web UI Development**
 ```bash
 # Terminal 1: Start API
-python main.py --api-only
+uv run python main.py --api-only
 
 # Terminal 2: Start web UI
 cd web && npm run dev
 ```
 
 Then open http://localhost:3000
+
+## Building from Source
+
+To create a distributable app (.dmg for macOS, .exe for Windows):
+
+```bash
+# One-command build (installs deps, builds web, creates package)
+uv run python scripts/build_release.py
+
+# Quick build (skip web rebuild if exists)
+uv run python scripts/build_release.py --quick
+```
+
+Output will be in `dist/`:
+- macOS: `LiveRecall-0.1.0-macOS-arm64.dmg`
+- Windows: `LiveRecall-0.1.0-Windows-x64.exe`
 
 ## Architecture
 
@@ -79,6 +95,9 @@ LiveRecall/
 │       ├── app/        # Pages
 │       ├── components/ # UI components
 │       └── lib/        # API client
+├── scripts/        # Build scripts
+│   ├── build_release.py    # One-click builder
+│   └── generate_icons.py   # Icon generator
 ├── tests/          # Test suite
 └── main.py         # Entry point
 ```
@@ -125,14 +144,20 @@ See [Privacy and Security](Privacy%20and%20Security.md) for details.
 ## Development
 
 ```bash
+# Install dependencies (includes dev tools)
+uv sync
+
+# Run the app
+uv run python main.py
+
 # Run tests
 uv run pytest
 
 # Run with coverage
 uv run pytest --cov=core --cov=api
 
-# Type checking (if using mypy)
-uv run mypy core/ api/
+# Run specific test file
+uv run pytest tests/test_api.py -v
 ```
 
 ## Contributing
@@ -142,7 +167,7 @@ Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests
+4. Run tests (`uv run pytest`)
 5. Submit a pull request
 
 ## License

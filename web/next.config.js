@@ -1,25 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Proxy API requests to FastAPI backend
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8742/api/:path*',
-      },
-    ];
-  },
-  // Allow images from local filesystem
+  // Enable static export for distribution
+  output: 'export',
+
+  // Disable image optimization (not available in static export)
   images: {
-    remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '8742',
-      },
-    ],
     unoptimized: true,
   },
+
+  // Base path for assets (empty for root)
+  basePath: '',
+
+  // Trailing slashes for static file serving
+  trailingSlash: true,
 };
 
 module.exports = nextConfig;

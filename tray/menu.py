@@ -45,18 +45,23 @@ class MenuBuilder:
         on_sync: Callable,
         on_set_mode: Callable[[str], None],
         on_quit: Callable,
+        on_download_update: Callable = None,
     ):
         self.on_toggle_recording = on_toggle_recording
         self.on_sync = on_sync
         self.on_set_mode = on_set_mode
         self.on_quit = on_quit
+        self.on_download_update = on_download_update
 
         # Current state
         self._status = SystemStatus()
+        self._update_info = None
 
-    def update_status(self, status: SystemStatus):
+    def update_status(self, status: SystemStatus, update_info: dict = None):
         """Update internal status"""
         self._status = status
+        if update_info is not None:
+            self._update_info = update_info
 
     def _make_mode_handler(self, mode: str):
         """Create a handler for mode selection"""
@@ -104,7 +109,8 @@ class MenuBuilder:
             for mode in CAPTURE_MODES
         ]
 
-        return Menu(
+        # Build menu items
+        items = [
             Item(recording_text, self.on_toggle_recording, default=True),
             Menu.SEPARATOR,
             Item(f"Mode: {status.recording_mode}", Menu(*mode_items)),
@@ -117,6 +123,17 @@ class MenuBuilder:
             Item("Search...", lambda: open_web_search()),
             Item("Open Timeline", lambda: open_web_timeline()),
             Item("Open Data Folder", lambda: open_data_folder()),
-            Menu.SEPARATOR,
-            Item("Quit", self.on_quit),
-        )
+        ]
+
+        # Add update notification if available
+        if self._update_info and self.on_download_update:
+            items.append(Menu.SEPARATOR)
+            items.append(Item(
+                f"Update Available: v{self._update_info['latest_version']}",
+                self.on_download_update
+            ))
+
+        items.append(Menu.SEPARATOR)
+        items.append(Item("Quit", self.on_quit))
+
+        return Menu(*items)
