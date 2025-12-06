@@ -1,14 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
 *.jpg
 *.png
-**/__pycache__/
-Compressison Test.py
+*.jpeg
 Data.json
-package-lock.json
-test.py
-Components/Ocr.py
-Components/VisualProcessing.py
-/flash-attention
-DataOld.json
-/liverecall.egg-info
-/web/.next
-/web/node_modules
+DataOld*.json
+debug.log
+*.log
+
+# Web UI
+web/.next/
+web/node_modules/
+
+# Build artifacts
+liverecall.egg-info/
+flash-attention/
+
+# Temporary files
+Temp/
+tmp/
