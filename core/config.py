@@ -46,7 +46,7 @@ class CaptureSettings:
     interval: float = 2.0  # seconds between captures
     threshold: float = 0.9  # SSIM threshold for change detection
     save_threshold: float = 0.6  # SSIM threshold for saving
-    quality: int = 85  # JPEG quality
+    quality: int = 95  # JPEG quality (1-100)
 
     # Preset modes
     MODES = {

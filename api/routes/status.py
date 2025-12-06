@@ -123,6 +123,10 @@ async def update_config(request: ConfigUpdateRequest):
         config.safe_mode_level = request.safe_mode_level.value
         updated.append(f"safe_mode_level={request.safe_mode_level.value}")
 
+    if request.capture_quality is not None:
+        config.capture.quality = request.capture_quality
+        updated.append(f"capture_quality={request.capture_quality}")
+
     if request.auto_unload_seconds is not None:
         set_auto_unload_timeout(request.auto_unload_seconds)
         updated.append(f"auto_unload_seconds={request.auto_unload_seconds}")
