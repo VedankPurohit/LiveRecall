@@ -34,8 +34,25 @@ dependencies = [
 
     # UI (legacy - will be replaced)
     "streamlit==1.32.2",
+
+    # System tray
+    "pystray>=0.19.0",
+    "httpx>=0.27.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "httpx>=0.27.0",  # For FastAPI TestClient
+]
+
+[project.scripts]
+liverecall = "main:main"
+liverecall-tray = "tray.app:run_tray"
+
+[tool.setuptools.packages.find]
+include = ["core*", "api*", "tray*", "tests*"]
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
