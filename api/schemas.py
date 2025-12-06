@@ -95,6 +95,42 @@ class SyncStatus(BaseModel):
         }
 
 
+# =============================================================================
+# Compression
+# =============================================================================
+
+class CompressionStatus(BaseModel):
+    """Compression operation status"""
+    is_compressing: bool
+    total: int = Field(description="Total screenshots to compress")
+    processed: int = Field(description="Screenshots compressed so far")
+    errors: int = Field(description="Number of errors")
+    bytes_saved: int = Field(description="Total bytes saved")
+    progress_percent: float = Field(description="Progress percentage")
+
+
+class CompressionStats(BaseModel):
+    """Compression statistics"""
+    compressed_count: int = Field(description="Number of compressed screenshots")
+    uncompressed_count: int = Field(description="Number of uncompressed screenshots")
+    compressible_count: int = Field(description="Number eligible for compression")
+    original_size_bytes: int = Field(description="Total original size of compressed images")
+    estimated_savings_bytes: int = Field(description="Estimated bytes that can be saved")
+
+
+class CompressionStartRequest(BaseModel):
+    """Request to start compression"""
+    older_than_days: Optional[int] = Field(None, ge=7, le=365)
+    quality: Optional[int] = Field(None, ge=50, le=90)
+
+
+class CompressionStartResponse(BaseModel):
+    """Response after starting compression"""
+    success: bool
+    message: str
+    compressible_count: int
+
+
 class SyncStartRequest(BaseModel):
     """Request to start sync"""
     batch_size: int = Field(default=10, ge=1, le=100)
@@ -265,9 +301,17 @@ class CaptureConfig(BaseModel):
     quality: int
 
 
+class CompressionConfig(BaseModel):
+    """Compression configuration"""
+    enabled: bool
+    after_days: int
+    quality: int
+
+
 class AppConfig(BaseModel):
     """Application configuration"""
     capture: CaptureConfig
+    compression: CompressionConfig
     encryption_enabled: bool
     safe_mode_enabled: bool
     safe_mode_level: SafeModeLevel
@@ -280,6 +324,9 @@ class ConfigUpdateRequest(BaseModel):
     capture_interval: Optional[float] = Field(None, ge=0.5, le=60.0)
     capture_threshold: Optional[float] = Field(None, ge=0.5, le=0.99)
     capture_quality: Optional[int] = Field(None, ge=50, le=100)
+    compression_enabled: Optional[bool] = None
+    compression_after_days: Optional[int] = Field(None, ge=7, le=365)
+    compression_quality: Optional[int] = Field(None, ge=50, le=90)
     safe_mode_enabled: Optional[bool] = None
     safe_mode_level: Optional[SafeModeLevel] = None
     auto_unload_seconds: Optional[int] = Field(None, ge=0, le=3600)

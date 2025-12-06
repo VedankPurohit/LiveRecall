@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import recording, sync, search, screenshots, status
+from api.routes import recording, sync, search, screenshots, status, compression
 from core.database import db
 
 # Configure logging - reduce uvicorn noise
@@ -81,6 +81,7 @@ app.include_router(recording.router, prefix="/api/v1")
 app.include_router(sync.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(screenshots.router, prefix="/api/v1")
+app.include_router(compression.router, prefix="/api/v1")
 
 
 # Root endpoint

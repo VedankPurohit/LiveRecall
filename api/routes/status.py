@@ -11,6 +11,7 @@ from api.schemas import (
     ModelStatus,
     AppConfig,
     CaptureConfig,
+    CompressionConfig,
     ConfigUpdateRequest,
     SuccessResponse,
     CaptureMode,
@@ -87,6 +88,11 @@ async def get_config():
             save_threshold=config.capture.save_threshold,
             quality=config.capture.quality,
         ),
+        compression=CompressionConfig(
+            enabled=config.compression.enabled,
+            after_days=config.compression.after_days,
+            quality=config.compression.quality,
+        ),
         encryption_enabled=config.encryption_enabled,
         safe_mode_enabled=config.safe_mode_enabled,
         safe_mode_level=SafeModeLevel(config.safe_mode_level),
@@ -126,6 +132,18 @@ async def update_config(request: ConfigUpdateRequest):
     if request.capture_quality is not None:
         config.capture.quality = request.capture_quality
         updated.append(f"capture_quality={request.capture_quality}")
+
+    if request.compression_enabled is not None:
+        config.compression.enabled = request.compression_enabled
+        updated.append(f"compression_enabled={request.compression_enabled}")
+
+    if request.compression_after_days is not None:
+        config.compression.after_days = request.compression_after_days
+        updated.append(f"compression_after_days={request.compression_after_days}")
+
+    if request.compression_quality is not None:
+        config.compression.quality = request.compression_quality
+        updated.append(f"compression_quality={request.compression_quality}")
 
     if request.auto_unload_seconds is not None:
         set_auto_unload_timeout(request.auto_unload_seconds)

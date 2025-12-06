@@ -9,3 +9,4 @@ Components/Ocr.py
 Components/VisualProcessing.py
 /flash-attention
 DataOld.json
+/liverecall.egg-info

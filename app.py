@@ -397,6 +397,101 @@ with tab3:
 
         st.divider()
 
-        st.subheader("Storage")
+        st.subheader("Storage Management")
+
+        # Get compression config and stats
+        compression_config = config.get("compression", {})
+        compression_stats = api_get("/compression/stats")
+
+        # Show storage location
         status = api_get("/status")
-        st.code(status.get("data_directory", "Unknown"))
+        st.caption(f"📁 {status.get('data_directory', 'Unknown')}")
+
+        # Compression toggle
+        compress_enabled = st.toggle(
+            "Auto-compress old screenshots",
+            value=compression_config.get("enabled", False),
+            help="Automatically compress screenshots older than the specified days"
+        )
+
+        if compress_enabled:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                compress_after_days = st.number_input(
+                    "Compress after (days)",
+                    min_value=7,
+                    max_value=365,
+                    value=compression_config.get("after_days", 60),
+                    step=7,
+                    help="Screenshots older than this will be compressed"
+                )
+
+            with col2:
+                compress_quality = st.slider(
+                    "Compression quality",
+                    min_value=50,
+                    max_value=90,
+                    value=compression_config.get("quality", 85),
+                    step=5,
+                    help="Lower = smaller files, more quality loss"
+                )
+
+            if st.button("Save Compression Settings"):
+                result = requests.put(
+                    f"{API_BASE}/config",
+                    json={
+                        "compression_enabled": compress_enabled,
+                        "compression_after_days": compress_after_days,
+                        "compression_quality": compress_quality,
+                    }
+                ).json()
+
+                if result.get("success"):
+                    st.success("Compression settings saved!")
+                else:
+                    st.error("Failed to save settings")
+
+        # Show compression stats
+        if "error" not in compression_stats:
+            compressed = compression_stats.get("compressed_count", 0)
+            compressible = compression_stats.get("compressible_count", 0)
+            original_bytes = compression_stats.get("original_size_bytes", 0)
+
+            st.caption(f"📊 {compressed} screenshots compressed")
+
+            if compressible > 0:
+                st.info(f"💡 {compressible} screenshots can be compressed")
+
+                # Manual compress button
+                if st.button(f"🗜️ Compress Now ({compressible})"):
+                    with st.spinner(f"Compressing {compressible} screenshots..."):
+                        result = api_post("/compression/start")
+
+                        if result.get("success"):
+                            # Poll for completion
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+
+                            while True:
+                                comp_status = api_get("/compression/status")
+                                if not comp_status.get("is_compressing", False):
+                                    break
+
+                                total = comp_status.get("total", 1)
+                                processed = comp_status.get("processed", 0)
+                                progress = processed / total if total > 0 else 0
+                                progress_bar.progress(progress)
+                                saved_kb = comp_status.get("bytes_saved", 0) // 1024
+                                status_text.text(f"Compressing {processed}/{total}... ({saved_kb}KB saved)")
+                                time.sleep(0.5)
+
+                            final_saved = comp_status.get("bytes_saved", 0)
+                            st.success(f"Compression complete! Saved {final_saved // 1024}KB")
+                        else:
+                            st.error(result.get("message", "Compression failed"))
+                    st.rerun()
+
+            if original_bytes > 0:
+                saved_mb = original_bytes / (1024 * 1024)
+                st.caption(f"💾 Original size of compressed images: {saved_mb:.1f}MB")
