@@ -66,7 +66,6 @@ class ProcessorService:
             daemon=True
         )
         self._thread.start()
-        print("Processor service started")
 
     def stop(self):
         """Stop processing"""
@@ -75,7 +74,6 @@ class ProcessorService:
         if self._thread:
             self._thread.join(timeout=10)
             self._thread = None
-        print("Processor service stopped")
 
     def sync_all(self, on_progress: Optional[Callable[[SyncProgress], None]] = None):
         """Synchronously process all unsynced screenshots (blocking)"""
@@ -120,22 +118,32 @@ class ProcessorService:
         return self._progress
 
     def _process_loop(self, batch_size: int):
-        """Background processing loop"""
+        """Background processing - processes all unsynced then stops"""
+        # Get total unsynced count upfront
+        total_unsynced = db.get_unsynced_count()
+
+        if total_unsynced == 0:
+            self._running = False
+            self._progress = SyncProgress(total=0, processed=0, errors=0, is_running=False)
+            return
+
+        self._progress = SyncProgress(
+            total=total_unsynced,
+            processed=0,
+            errors=0,
+            is_running=True
+        )
+
+        print(f"🔄 Syncing {total_unsynced} screenshots...")
+
+        # Process in batches until done
         while self._running and not self._cancel_requested:
-            # Get unsynced screenshots
+            # Get next batch
             unsynced = db.get_unsynced_screenshots(limit=batch_size)
 
             if not unsynced:
-                # Nothing to process, wait and check again
-                time.sleep(5)
-                continue
-
-            self._progress = SyncProgress(
-                total=db.get_unsynced_count(),
-                processed=0,
-                errors=0,
-                is_running=True
-            )
+                # All done!
+                break
 
             for screenshot in unsynced:
                 if self._cancel_requested:
@@ -149,18 +157,18 @@ class ProcessorService:
                     db.add_embedding(screenshot["id"], embedding)
 
                     self._progress.processed += 1
+                    print(f"  ✓ {self._progress.processed}/{self._progress.total}")
                 except Exception as e:
-                    print(f"Error processing {screenshot['image_path']}: {e}")
+                    print(f"  ✗ Error: {screenshot['image_path']}: {e}")
                     self._progress.errors += 1
 
                 if self._on_progress:
                     self._on_progress(self._progress)
 
-            # Small delay between batches
-            time.sleep(1)
-
+        # Mark as complete
         self._running = False
         self._progress.is_running = False
+        print(f"✅ Sync complete: {self._progress.processed} processed, {self._progress.errors} errors")
 
 
 # Global processor service instance

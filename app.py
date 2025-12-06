@@ -1,103 +1,99 @@
 """
 LiveRecall - Streamlit UI
-Uses new core/ modules for capture, sync, and search
+Uses FastAPI backend for all operations
 """
 import streamlit as st
-import os
+import requests
 from pathlib import Path
+import time
 
-# Import new core modules
-from core.config import config, get_screenshots_dir
-from core.database import db
-from core.capture import capture_service
-from core.embeddings import get_text_embedding, get_combined_embedding, get_safe_search_embedding, SAFE_MODE_WEIGHTS
-from core.processor import sync_screenshots, SyncProgress
-
-# Legacy encryption (keeping for now)
-from Components.Crypt import EncryptDecryptImage
+# API base URL
+API_BASE = "http://localhost:8742/api/v1"
 
 st.set_page_config(page_title="LiveRecall", page_icon="🧠", layout="wide")
 
-# Initialize database connection
-if "db_connected" not in st.session_state:
-    db.connect()
-    st.session_state.db_connected = True
 
-# Temp directory for decrypted images
-TEMP_DIR = Path("Temp")
-TEMP_DIR.mkdir(exist_ok=True)
-
-
-def remove_temp_images():
-    """Clean up temporary decrypted images"""
-    for file in TEMP_DIR.iterdir():
-        if file.is_file():
-            file.unlink()
+def api_get(endpoint: str) -> dict:
+    """Make GET request to API"""
+    try:
+        response = requests.get(f"{API_BASE}{endpoint}", timeout=30)
+        return response.json()
+    except requests.exceptions.ConnectionError:
+        return {"error": "Cannot connect to API. Is the server running?"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
-def search_images(
-    query: str,
-    safe_mode: bool = True,
-    safe_mode_level: str = "mid",
-    negative_texts: str = "",
-    negative_weight: float = 1.0,
-    limit: int = 50
-) -> tuple[list[str], list[float]]:
-    """Search for images matching the query"""
-
-    # Generate query embedding
-    if safe_mode:
-        level_key = safe_mode_level.lower().replace(" ", "")
-        embedding = get_safe_search_embedding(query, level_key)
-    elif negative_texts:
-        neg_list = [t.strip() for t in negative_texts.split(",") if t.strip()]
-        embedding = get_combined_embedding(
-            base_text=query,
-            negative_texts=neg_list,
-            negative_weight=negative_weight
-        )
-    else:
-        embedding = get_text_embedding(query)
-
-    # Search database
-    results = db.search_similar(embedding, limit=limit)
-
-    image_paths = []
-    similarities = []
-
-    for result in results:
-        image_paths.append(result["image_path"])
-        similarities.append(result["similarity"])
-
-    return image_paths, similarities
+def api_post(endpoint: str, data: dict = None) -> dict:
+    """Make POST request to API"""
+    try:
+        response = requests.post(f"{API_BASE}{endpoint}", json=data, timeout=60)
+        return response.json()
+    except requests.exceptions.ConnectionError:
+        return {"error": "Cannot connect to API. Is the server running?"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
-# --- Sidebar for key and status ---
+def check_api_connection() -> bool:
+    """Check if API is reachable"""
+    result = api_get("/health")
+    return "error" not in result
+
+
+# --- Check API Connection ---
+api_connected = check_api_connection()
+
+if not api_connected:
+    st.error("⚠️ Cannot connect to API server!")
+    st.info("Start the API server first:")
+    st.code("uv run uvicorn api.main:app --port 8742")
+    st.stop()
+
+
+# --- Sidebar ---
 with st.sidebar:
     st.header("🧠 LiveRecall")
 
-    # Encryption key
-    encryption_key = st.text_input("Encryption Key", type="password", key="encryption_key")
-    if encryption_key == "DevMode":
-        st.warning("DevMode: No encryption")
-    elif encryption_key == "":
-        st.info("Enter a key to enable encryption")
+    # Get status from API
+    status = api_get("/status")
+
+    if "error" in status:
+        st.error(status["error"])
     else:
-        st.success("Encryption enabled")
+        # Database stats
+        db_stats = status.get("database", {})
+        st.metric("Total Screenshots", db_stats.get("total_screenshots", 0))
+        st.metric("Synced", db_stats.get("synced", 0))
+        st.metric("Unsynced", db_stats.get("unsynced", 0))
 
-    st.divider()
+        st.divider()
 
-    # Status
-    stats = db.get_stats()
-    st.metric("Total Screenshots", stats["total_screenshots"])
-    st.metric("Synced", stats["synced"])
-    st.metric("Unsynced", stats["unsynced"])
+        # Recording status
+        recording = status.get("recording", {})
+        if recording.get("is_recording"):
+            st.success("● Recording")
+        else:
+            st.info("○ Not Recording")
 
-    # Recording status
-    if capture_service.is_running:
-        st.success("● Recording")
-    else:
-        st.info("○ Not Recording")
+        # Model status
+        model = status.get("model", {})
+        if model.get("loaded"):
+            st.success(f"🧠 Model loaded ({model.get('device')})")
+            idle = model.get("idle_seconds", 0)
+            st.caption(f"Idle: {idle:.0f}s")
+        else:
+            st.info("🧠 Model not loaded")
+
+        st.divider()
+
+        # Unload model button
+        if model.get("loaded"):
+            if st.button("Unload Model"):
+                result = api_post("/sync/model/unload")
+                if result.get("success"):
+                    st.success("Model unloaded")
+                    st.rerun()
 
 
 # --- Main tabs ---
@@ -109,34 +105,59 @@ tab1, tab2, tab3 = st.tabs(["🔍 Search", "🗑️ Delete", "⚙️ Settings"])
 with tab1:
     st.title("Search Your Memory")
 
+    # Get current status
+    status = api_get("/status")
+    recording_status = status.get("recording", {})
+    db_stats = status.get("database", {})
+
     # Control buttons
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("▶️ Start Recording", disabled=capture_service.is_running):
-            capture_service.start()
+        if st.button("▶️ Start Recording", disabled=recording_status.get("is_recording", False)):
+            result = api_post("/recording/start")
+            if result.get("success"):
+                st.success("Recording started!")
+            else:
+                st.error(result.get("message", "Failed to start"))
             st.rerun()
 
     with col2:
-        if st.button("⏹️ Stop Recording", disabled=not capture_service.is_running):
-            capture_service.stop()
+        if st.button("⏹️ Stop Recording", disabled=not recording_status.get("is_recording", False)):
+            result = api_post("/recording/stop")
+            if result.get("success"):
+                st.success("Recording stopped!")
+            else:
+                st.error(result.get("message", "Failed to stop"))
             st.rerun()
 
     with col3:
-        unsynced = db.get_unsynced_count()
+        unsynced = db_stats.get("unsynced", 0)
         if st.button(f"🔄 Sync ({unsynced})", disabled=unsynced == 0):
             with st.spinner(f"Syncing {unsynced} screenshots..."):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                result = api_post("/sync/start", {"batch_size": 10})
 
-                def update_progress(progress: SyncProgress):
-                    if progress.total > 0:
-                        progress_bar.progress(progress.processed / progress.total)
-                        status_text.text(f"Processing {progress.processed}/{progress.total}...")
+                if result.get("success"):
+                    # Poll for completion
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
 
-                result = sync_screenshots(on_progress=update_progress)
-                st.success(f"Synced {result.processed} screenshots!")
-                st.rerun()
+                    while True:
+                        sync_status = api_get("/sync/status")
+                        if not sync_status.get("is_syncing", False):
+                            break
+
+                        total = sync_status.get("total", 1)
+                        processed = sync_status.get("processed", 0)
+                        progress = processed / total if total > 0 else 0
+                        progress_bar.progress(progress)
+                        status_text.text(f"Processing {processed}/{total}...")
+                        time.sleep(0.5)
+
+                    st.success("Sync complete!")
+                else:
+                    st.error(result.get("message", "Sync failed"))
+            st.rerun()
 
     with col4:
         safe_mode = st.toggle("Safe Mode", value=True)
@@ -145,11 +166,12 @@ with tab1:
     if safe_mode:
         safe_mode_level = st.selectbox(
             "Moderation Level",
-            options=["Low", "LowMid", "Mid", "MidHigh", "High", "Very High", "Extreme"],
-            index=2
+            options=["low", "lowmid", "mid", "midhigh", "high", "veryhigh", "extreme"],
+            index=2,
+            format_func=lambda x: x.replace("mid", "Mid").replace("low", "Low").replace("high", "High").replace("very", "Very ").replace("extreme", "Extreme").title()
         )
     else:
-        safe_mode_level = "Mid"
+        safe_mode_level = "mid"
 
     # Search input
     col_search, col_advanced = st.columns([2, 1])
@@ -164,65 +186,66 @@ with tab1:
                 placeholder="Terms to avoid, comma separated"
             )
             negative_weight = st.slider("Negative weight", 0.0, 2.0, 1.0, 0.1)
-            result_limit = st.slider("Max results", 10, 100, 50, 10)
+            result_limit = st.slider("Max results", 10, 100, 20, 10)
 
     # Search button
-    if st.button("🔍 Search", type="primary") or (search_term and "last_search" in st.session_state and st.session_state.last_search != search_term):
+    if st.button("🔍 Search", type="primary"):
         if not search_term:
             st.warning("Please enter a search term")
-        elif db.get_stats()["synced"] == 0:
+        elif db_stats.get("synced", 0) == 0:
             st.warning("No synced screenshots yet. Click 'Sync' first!")
         else:
-            st.session_state.last_search = search_term
-            remove_temp_images()
-
             with st.spinner("Searching..."):
-                image_paths, similarities = search_images(
-                    query=search_term,
-                    safe_mode=safe_mode,
-                    safe_mode_level=safe_mode_level,
-                    negative_texts=negative_texts if not safe_mode else "",
-                    negative_weight=negative_weight,
-                    limit=result_limit
-                )
+                # Build search request
+                search_data = {
+                    "query": search_term,
+                    "limit": result_limit,
+                    "safe_mode": safe_mode,
+                    "safe_mode_level": safe_mode_level,
+                }
 
-            if image_paths:
-                st.success(f"Found {len(image_paths)} results!")
+                if negative_texts and not safe_mode:
+                    search_data["negative_texts"] = [t.strip() for t in negative_texts.split(",") if t.strip()]
+                    search_data["negative_weight"] = negative_weight
 
-                # Decrypt images to temp folder
-                decrypted_paths = []
-                for path in image_paths:
-                    temp_path = TEMP_DIR / Path(path).name
-                    if encryption_key:
-                        EncryptDecryptImage(path, encryption_key, str(temp_path))
-                    else:
-                        # Just copy if no encryption
-                        import shutil
-                        shutil.copy(path, temp_path)
-                    decrypted_paths.append(str(temp_path))
+                # Call API
+                result = api_post("/search", search_data)
+
+            if "error" in result:
+                st.error(result.get("error") or result.get("detail", "Search failed"))
+            elif "detail" in result:
+                st.error(result["detail"])
+            elif result.get("total_results", 0) == 0:
+                st.warning("No results found. Try a different search term.")
+            else:
+                st.success(f"Found {result['total_results']} results!")
+
+                results = result.get("results", [])
 
                 # Image slider
-                if len(decrypted_paths) > 1:
+                if len(results) > 1:
                     selected_idx = st.slider(
                         "Browse results",
-                        0, len(decrypted_paths) - 1, 0
+                        0, len(results) - 1, 0
                     )
                 else:
                     selected_idx = 0
 
                 # Show selected image
-                st.image(decrypted_paths[selected_idx], use_container_width=True)
-                st.caption(f"Image {selected_idx + 1} of {len(decrypted_paths)} • Similarity: {similarities[selected_idx]:.2%}")
+                selected = results[selected_idx]
+                image_url = f"http://localhost:8742{selected['image_url']}"
+
+                st.image(image_url, use_column_width=True)
+                st.caption(f"Image {selected_idx + 1} of {len(results)} • Similarity: {selected['similarity']:.2%}")
 
                 # Gallery
                 st.subheader("Gallery")
                 cols = st.columns(4)
-                for i, (path, sim) in enumerate(zip(decrypted_paths, similarities)):
+                for i, r in enumerate(results):
                     with cols[i % 4]:
-                        st.image(path, use_container_width=True)
-                        st.caption(f"{sim:.1%}")
-            else:
-                st.warning("No results found. Try a different search term.")
+                        img_url = f"http://localhost:8742{r['image_url']}"
+                        st.image(img_url, use_column_width=True)
+                        st.caption(f"{r['similarity']:.1%}")
 
 # =============================================================================
 # DELETE TAB
@@ -230,17 +253,30 @@ with tab1:
 with tab2:
     st.title("Delete Screenshots")
 
-    stats = db.get_stats()
-    st.write(f"Total screenshots: {stats['total_screenshots']}")
+    status = api_get("/status")
+    db_stats = status.get("database", {})
+    total = db_stats.get("total_screenshots", 0)
 
-    if st.button("🗑️ Clear All Data", type="secondary"):
-        if st.checkbox("I understand this will delete ALL screenshots permanently"):
-            db.clear_all()
-            # Also clear screenshot files
-            for f in get_screenshots_dir().iterdir():
-                f.unlink()
-            st.success("All data cleared!")
-            st.rerun()
+    st.write(f"Total screenshots: {total}")
+
+    if total > 0:
+        st.warning("⚠️ This will permanently delete all screenshots!")
+
+        confirm = st.checkbox("I understand this will delete ALL screenshots permanently")
+
+        if st.button("🗑️ Clear All Data", type="secondary", disabled=not confirm):
+            result = requests.delete(
+                f"{API_BASE}/screenshots",
+                params={"confirm": True, "delete_files": True}
+            ).json()
+
+            if result.get("success"):
+                st.success(f"Deleted {result.get('deleted_count', 0)} screenshots!")
+                st.rerun()
+            else:
+                st.error("Failed to delete")
+    else:
+        st.info("No screenshots to delete")
 
 # =============================================================================
 # SETTINGS TAB
@@ -248,59 +284,108 @@ with tab2:
 with tab3:
     st.title("Settings")
 
-    st.subheader("Capture Mode")
+    # Get current config
+    config = api_get("/config")
 
-    mode_descriptions = {
-        "normal": "Balanced settings for everyday use",
-        "games": "Less frequent captures for gaming sessions",
-        "fast": "Higher sensitivity to capture more details",
-        "presentation": "Optimized for slide decks and presentations",
-        "video": "Captures key scenes and transitions in videos",
-        "coding": "Tracks meaningful changes in code editors",
-        "security": "Minimizes false triggers for surveillance",
-        "timelapse": "Regular interval captures regardless of content",
-    }
+    if "error" in config:
+        st.error(config["error"])
+    else:
+        st.subheader("Capture Mode")
 
-    selected_mode = st.selectbox(
-        "Capture Mode",
-        options=list(mode_descriptions.keys()),
-        format_func=lambda x: x.title()
-    )
+        mode_descriptions = {
+            "normal": "Balanced settings for everyday use",
+            "games": "Less frequent captures for gaming sessions",
+            "fast": "Higher sensitivity to capture more details",
+            "presentation": "Optimized for slide decks and presentations",
+            "video": "Captures key scenes and transitions in videos",
+            "coding": "Tracks meaningful changes in code editors",
+            "security": "Minimizes false triggers for surveillance",
+            "timelapse": "Regular interval captures regardless of content",
+        }
 
-    if selected_mode:
-        config.capture.set_mode(selected_mode)
-        st.info(mode_descriptions[selected_mode])
+        capture_config = config.get("capture", {})
+        current_mode = capture_config.get("mode", "normal")
 
-    st.divider()
-
-    st.subheader("Capture Settings")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        new_interval = st.number_input(
-            "Interval (seconds)",
-            min_value=0.5,
-            max_value=60.0,
-            value=float(config.capture.interval),
-            step=0.5
+        selected_mode = st.selectbox(
+            "Capture Mode",
+            options=list(mode_descriptions.keys()),
+            index=list(mode_descriptions.keys()).index(current_mode) if current_mode in mode_descriptions else 0,
+            format_func=lambda x: x.title()
         )
-        config.capture.interval = new_interval
 
-    with col2:
-        new_threshold = st.slider(
-            "Change Threshold",
-            min_value=0.5,
-            max_value=0.99,
-            value=config.capture.threshold,
-            step=0.01,
-            help="Higher = less sensitive (fewer captures)"
+        st.info(mode_descriptions.get(selected_mode, ""))
+
+        if selected_mode != current_mode:
+            if st.button("Apply Mode"):
+                result = api_post(f"/recording/mode/{selected_mode}")
+                st.success(f"Mode changed to {selected_mode}")
+                st.rerun()
+
+        st.divider()
+
+        st.subheader("Capture Settings")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            new_interval = st.number_input(
+                "Interval (seconds)",
+                min_value=0.5,
+                max_value=60.0,
+                value=float(capture_config.get("interval", 2.0)),
+                step=0.5
+            )
+
+        with col2:
+            new_threshold = st.slider(
+                "Change Threshold",
+                min_value=0.5,
+                max_value=0.99,
+                value=float(capture_config.get("threshold", 0.9)),
+                step=0.01,
+                help="Higher = less sensitive (fewer captures)"
+            )
+
+        if st.button("Save Capture Settings"):
+            result = requests.put(
+                f"{API_BASE}/config",
+                json={
+                    "capture_interval": new_interval,
+                    "capture_threshold": new_threshold,
+                }
+            ).json()
+
+            if result.get("success"):
+                st.success("Settings saved!")
+            else:
+                st.error("Failed to save settings")
+
+        st.divider()
+
+        st.subheader("Model Settings")
+
+        auto_unload = config.get("auto_unload_seconds", 300)
+        new_auto_unload = st.number_input(
+            "Auto-unload timeout (seconds)",
+            min_value=0,
+            max_value=3600,
+            value=auto_unload,
+            step=60,
+            help="0 = never auto-unload"
         )
-        config.capture.threshold = new_threshold
 
-    st.divider()
+        if st.button("Save Model Settings"):
+            result = requests.put(
+                f"{API_BASE}/config",
+                json={"auto_unload_seconds": new_auto_unload}
+            ).json()
 
-    st.subheader("Storage")
-    st.code(str(config.data_dir))
+            if result.get("success"):
+                st.success("Settings saved!")
+            else:
+                st.error("Failed to save settings")
 
-    st.subheader("Database")
-    st.code(str(config.database_path))
+        st.divider()
+
+        st.subheader("Storage")
+        status = api_get("/status")
+        st.code(status.get("data_directory", "Unknown"))

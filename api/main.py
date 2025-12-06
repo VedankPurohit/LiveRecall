@@ -2,6 +2,7 @@
 LiveRecall API
 FastAPI application for controlling LiveRecall
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,20 +11,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import recording, sync, search, screenshots, status
 from core.database import db
 
+# Configure logging - reduce uvicorn noise
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    print("Starting LiveRecall API...")
+    print("🧠 LiveRecall API starting...")
     db.connect()
-    print(f"Database connected: {db.db_path}")
-    print(f"Stats: {db.get_stats()}")
+    stats = db.get_stats()
+    print(f"📁 Database: {db.db_path}")
+    print(f"📊 Screenshots: {stats['total_screenshots']} total, {stats['synced']} synced")
 
     yield
 
     # Shutdown
-    print("Shutting down LiveRecall API...")
+    print("🛑 LiveRecall API shutting down...")
     from core.capture import capture_service
     from core.processor import processor_service
     from core.embeddings import unload_model
@@ -33,7 +38,7 @@ async def lifespan(app: FastAPI):
     processor_service.stop()
     unload_model()
     db.disconnect()
-    print("Shutdown complete")
+    print("✅ Shutdown complete")
 
 
 # Create FastAPI app
