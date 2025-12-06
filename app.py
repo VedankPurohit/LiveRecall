@@ -1,244 +1,306 @@
+"""
+LiveRecall - Streamlit UI
+Uses new core/ modules for capture, sync, and search
+"""
 import streamlit as st
+import os
+from pathlib import Path
+
+# Import new core modules
+from core.config import config, get_screenshots_dir
+from core.database import db
+from core.capture import capture_service
+from core.embeddings import get_text_embedding, get_combined_embedding, get_safe_search_embedding, SAFE_MODE_WEIGHTS
+from core.processor import sync_screenshots, SyncProgress
+
+# Legacy encryption (keeping for now)
 from Components.Crypt import EncryptDecryptImage
-import CaptureStart
-import streamlit.components.v1 as components
-import numpy as np
-import base64, os
-#from Components.JsonData import GetPropTime
-st.set_page_config(page_title="Recall", page_icon="", layout="wide")
+
+st.set_page_config(page_title="LiveRecall", page_icon="🧠", layout="wide")
+
+# Initialize database connection
+if "db_connected" not in st.session_state:
+    db.connect()
+    st.session_state.db_connected = True
+
+# Temp directory for decrypted images
+TEMP_DIR = Path("Temp")
+TEMP_DIR.mkdir(exist_ok=True)
 
 
-with st.popover("Enter Your Key"):
-    st.markdown("Enter a Valid Key")
-    CaptureStart.Key = st.text_input("What's your Key?")
-    if CaptureStart.Key == "DevMode":
-        st.warning("DevMode Activated, No Security")
-    elif CaptureStart.Key == "":
-        st.warning("Please Enter a Valid Key")
-    else:
-        st.success("Security Activated, Encription On")
+def remove_temp_images():
+    """Clean up temporary decrypted images"""
+    for file in TEMP_DIR.iterdir():
+        if file.is_file():
+            file.unlink()
 
 
-def RemoveImages(directory= "Temp"):
-    files = os.listdir(directory)
-    
-    for file in files:
-        file_path = os.path.join(directory, file)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-            # print(f"Removed file: {file_path}")
-    
+def search_images(
+    query: str,
+    safe_mode: bool = True,
+    safe_mode_level: str = "mid",
+    negative_texts: str = "",
+    negative_weight: float = 1.0,
+    limit: int = 50
+) -> tuple[list[str], list[float]]:
+    """Search for images matching the query"""
 
-def get_image(text, NegativeTexts="", NegativeImages = "", PositiveImages = "", NegTextWeight=1.0,NegativeImageWeight = 1.0, PositveImageWeight = 1.0):
-    print("Getting Images")
-    print(NegativeTexts, NegTextWeight)
-    # try:
-    if True:
-        Emb = CaptureStart.ClipMode.TextEmb(text)
-        print("Initial Emb created")
-        if SafeMode == True:
-            if SafeMode_weight == "Low":
-                Negweight = 0.6
-            elif SafeMode_weight == "LowMid":
-                Negweight = 0.8
-            elif SafeMode_weight == "Mid":
-                Negweight = 1.0
-            elif SafeMode_weight == "MidHigh":
-                Negweight = 1.2
-            elif SafeMode_weight == "High":
-                Negweight = 1.4
-            elif SafeMode_weight == "Very High":
-                Negweight = 1.8
-            elif SafeMode_weight == "Extream":
-                Negweight = 2.5
-            else:
-                Negweight = 0.4
-            NegativeTexts = ""
-            print(f"Safe mode is on - {text}, {NegativeTexts}, {Negweight}")
-            try:
-                Emb = CaptureStart.ClipMode.create_query_embedding(Emb= Emb, negative_texts=NegativeTexts,negTextWeight=Negweight, safeMode=True)
-            except Exception as e:
-                print(f"error - {e} happened in safe mode using create_query_embedding")
-        else: 
-            print(f"SafeMode is off")
-            try:
-                Emb = CaptureStart.ClipMode.create_query_embedding(Emb= Emb, negative_texts= NegativeTexts,
-                                                                    negative_images=NegativeImages, positive_images= PositiveImages,
-                                                                     negTextWeight=NegTextWeight, negImgWeight=NegativeImageWeight, posImgWeight=PositveImageWeight)
-            except Exception as e:
-                print(f"error - {e} happened in Normal mode using create_query_embedding")
-            
-        #     print("Extracted Embeddings With Negitives")
-        #     Negative = Negative.split(",") # For some reason if i have the final negative mode to be [''], The results are automaticaly safe
-        #     print(Negative,Negweight)
-        #     for i in range(len(Negative)):
-        #         Negative[i] = Negative[i].strip()
-        #     Emb = CaptureStart.ClipMode.create_query_embedding([text], Negative,negW=Negweight)
-        # print("Extracted Embeddings")
-        # print(Negative, Negweight)
-        Lis, Scores = CaptureStart.RetriveMemoryMax(Emb,80)
-        print(F"Found images {len(Lis)}")
-        SavedLis = []
-        for a in Lis:
-            Save = a.replace("CapturedData", "Temp")
-            EncryptDecryptImage(a, CaptureStart.Key, Save)
-            SavedLis.append(Save)
-        print("Images Got Successfully")
-    
-        return SavedLis, Scores  
-    # except Exception as e:
-    #     print("Error in get_image: \n", e)
-    #     return []
-
-tab1, tab2, tab3 = st.tabs(["Recall", "Delete", "Settings"])
-with tab1:
-    st.title("Recall")
-    Col1 , Col2, Col3, Col4 = st.columns(4, gap="small")
-    with Col1:
-        if CaptureStart.Key != "" and st.button("Start", type="secondary") and CaptureStart.Key != "":
-            # CaptureStart.ImportModels() ## Loding model only when needed
-            CaptureStart.Start = True
-            if CaptureStart.Threaded.is_alive() == False:
-                CaptureStart.Threaded.start()
-        
-    with Col2:
-        if CaptureStart.Key != "" and st.button("Stop", type="primary"):
-            CaptureStart.Start = False
-    
-    with Col3:
-        SafeMode = st.toggle(label="Safe Mode", value=True, key="SafeMode")
-        if "prev_safemode_bool" not in st.session_state:
-            st.session_state.prev_safemode_bool = True
-        # st.write(f"SafeMode is set to : {SafeMode}")
-
-    with Col4:
-        SafeMode_weight = st.selectbox(
-            "Set Modration Level",
-            key="SafeMode_weight",
-            options=["Low", "LowMid", "Mid", "MidHigh", "High", "Very High","Extream"],
+    # Generate query embedding
+    if safe_mode:
+        level_key = safe_mode_level.lower().replace(" ", "")
+        embedding = get_safe_search_embedding(query, level_key)
+    elif negative_texts:
+        neg_list = [t.strip() for t in negative_texts.split(",") if t.strip()]
+        embedding = get_combined_embedding(
+            base_text=query,
+            negative_texts=neg_list,
+            negative_weight=negative_weight
         )
-        if "prev_safemode_weight" not in st.session_state:
-            st.session_state.prev_safemode_weight = "Low"
+    else:
+        embedding = get_text_embedding(query)
 
-    Col6 , Col7 = st.columns(2, gap="medium")
-    with Col6:
-        search_term = st.text_input("Search:", key="search_term")  # Use a key for caching
-        if 'prev_search_term' not in st.session_state:
-            st.session_state.prev_search_term = ""
+    # Search database
+    results = db.search_similar(embedding, limit=limit)
 
-    with Col7:
+    image_paths = []
+    similarities = []
 
+    for result in results:
+        image_paths.append(result["image_path"])
+        similarities.append(result["similarity"])
 
-        with st.expander("Advanced Settings ⬇️", expanded=False):
-            st.markdown("### Customize Additional Options")
-
-            # Positive Images input and weight
-            pos_images = st.text_input("Positive Images", 
-                                       placeholder="Enter positive image Ids, separated by commas")
-            pos_img_weight = st.number_input("Positive Images Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
-
-            # Negative Images input and weight
-            neg_images = st.text_input("Negative Images", 
-                                       placeholder="Enter negative image Ids, separated by commas")
-            neg_img_weight = st.number_input("Negative Images Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
-
-            # Negative Texts input and weight
-            NegativeTerms = st.text_input("Negative Texts", 
-                                      placeholder="Enter negative texts, separated by commas")
-            neg_text_weight = st.number_input("Negative Texts Weight", min_value=-2.0, max_value= 2.0, value=1.0, step=0.1)
-            if "prev_Negative" not in st.session_state:
-                st.session_state.prev_Negative = ""
+    return image_paths, similarities
 
 
-    if CaptureStart.Key != "" and (st.button("Search") or st.session_state.prev_search_term != search_term or st.session_state.prev_Negative != NegativeTerms or st.session_state.prev_safemode_weight != SafeMode_weight):
-        # CaptureStart.ImportModels() ## Loading model only when needed
-        # After displaying them, remove from Temp
-        RemoveImages()
-        try:
-            if search_term:
-                # image_locations, SimiarityScores = get_image(search_term, NegativeTerms, neg_text_weight)
-                image_locations, SimiarityScores = get_image(text = search_term, NegativeTexts= NegativeTerms, NegativeImages = neg_images, PositiveImages = pos_images, NegTextWeight=neg_text_weight,NegativeImageWeight = neg_img_weight, PositveImageWeight = pos_img_weight)
-                print(len(image_locations))
-                if image_locations:
-                    try:
-                        st.success(f"Found {len(image_locations)} images!")
+# --- Sidebar for key and status ---
+with st.sidebar:
+    st.header("🧠 LiveRecall")
 
-                        # --- ONLY THIS PART CHANGED FOR IMAGE DISPLAY ---
-                        # Create a slider to cycle through the found images
-                        if len(image_locations) > 1:
-                            selected_index = st.slider(
-                                "Slide to view images",
-                                min_value=0,
-                                max_value=len(image_locations) - 1,
-                                value=0,
-                                help="Move the slider to switch between images."
-                            )
-                        else:
-                            selected_index = 0
+    # Encryption key
+    encryption_key = st.text_input("Encryption Key", type="password", key="encryption_key")
+    if encryption_key == "DevMode":
+        st.warning("DevMode: No encryption")
+    elif encryption_key == "":
+        st.info("Enter a key to enable encryption")
+    else:
+        st.success("Encryption enabled")
 
-                        # Show the selected image
-                        st.image(
-                            image_locations[selected_index],
-                            use_column_width=True
-                        )
+    st.divider()
 
-                        # Optionally, show a caption
-                        st.caption(f"Image {selected_index + 1} of {len(image_locations)}")
+    # Status
+    stats = db.get_stats()
+    st.metric("Total Screenshots", stats["total_screenshots"])
+    st.metric("Synced", stats["synced"])
+    st.metric("Unsynced", stats["unsynced"])
 
-                        st.header("Gallery")
-                        col1, col2, col3 = st.columns(3, gap="medium")
-                        with st.container():
-                            for i, image_location in enumerate(image_locations):
-                                with col1 if i % 3 == 0 else col2 if i % 3 == 1 else col3:
-                                    # st.image(image_location,caption=f"Score - {SimiarityScores[i]} ")
-                                    st.image(image_location,caption=image_location.replace("Temp\screenshot_","").replace(".png","").replace(".jpg", "").replace("Temp\Snap -", ""), use_column_width  = "auto")
-                    except:
-                        st.warning("No images found for your search term.")
+    # Recording status
+    if capture_service.is_running:
+        st.success("● Recording")
+    else:
+        st.info("○ Not Recording")
 
 
+# --- Main tabs ---
+tab1, tab2, tab3 = st.tabs(["🔍 Search", "🗑️ Delete", "⚙️ Settings"])
 
+# =============================================================================
+# SEARCH TAB
+# =============================================================================
+with tab1:
+    st.title("Search Your Memory")
+
+    # Control buttons
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if st.button("▶️ Start Recording", disabled=capture_service.is_running):
+            capture_service.start()
+            st.rerun()
+
+    with col2:
+        if st.button("⏹️ Stop Recording", disabled=not capture_service.is_running):
+            capture_service.stop()
+            st.rerun()
+
+    with col3:
+        unsynced = db.get_unsynced_count()
+        if st.button(f"🔄 Sync ({unsynced})", disabled=unsynced == 0):
+            with st.spinner(f"Syncing {unsynced} screenshots..."):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                def update_progress(progress: SyncProgress):
+                    if progress.total > 0:
+                        progress_bar.progress(progress.processed / progress.total)
+                        status_text.text(f"Processing {progress.processed}/{progress.total}...")
+
+                result = sync_screenshots(on_progress=update_progress)
+                st.success(f"Synced {result.processed} screenshots!")
+                st.rerun()
+
+    with col4:
+        safe_mode = st.toggle("Safe Mode", value=True)
+
+    # Safe mode level
+    if safe_mode:
+        safe_mode_level = st.selectbox(
+            "Moderation Level",
+            options=["Low", "LowMid", "Mid", "MidHigh", "High", "Very High", "Extreme"],
+            index=2
+        )
+    else:
+        safe_mode_level = "Mid"
+
+    # Search input
+    col_search, col_advanced = st.columns([2, 1])
+
+    with col_search:
+        search_term = st.text_input("🔍 Search", placeholder="What are you looking for?")
+
+    with col_advanced:
+        with st.expander("Advanced Options"):
+            negative_texts = st.text_input(
+                "Negative terms",
+                placeholder="Terms to avoid, comma separated"
+            )
+            negative_weight = st.slider("Negative weight", 0.0, 2.0, 1.0, 0.1)
+            result_limit = st.slider("Max results", 10, 100, 50, 10)
+
+    # Search button
+    if st.button("🔍 Search", type="primary") or (search_term and "last_search" in st.session_state and st.session_state.last_search != search_term):
+        if not search_term:
+            st.warning("Please enter a search term")
+        elif db.get_stats()["synced"] == 0:
+            st.warning("No synced screenshots yet. Click 'Sync' first!")
+        else:
+            st.session_state.last_search = search_term
+            remove_temp_images()
+
+            with st.spinner("Searching..."):
+                image_paths, similarities = search_images(
+                    query=search_term,
+                    safe_mode=safe_mode,
+                    safe_mode_level=safe_mode_level,
+                    negative_texts=negative_texts if not safe_mode else "",
+                    negative_weight=negative_weight,
+                    limit=result_limit
+                )
+
+            if image_paths:
+                st.success(f"Found {len(image_paths)} results!")
+
+                # Decrypt images to temp folder
+                decrypted_paths = []
+                for path in image_paths:
+                    temp_path = TEMP_DIR / Path(path).name
+                    if encryption_key:
+                        EncryptDecryptImage(path, encryption_key, str(temp_path))
+                    else:
+                        # Just copy if no encryption
+                        import shutil
+                        shutil.copy(path, temp_path)
+                    decrypted_paths.append(str(temp_path))
+
+                # Image slider
+                if len(decrypted_paths) > 1:
+                    selected_idx = st.slider(
+                        "Browse results",
+                        0, len(decrypted_paths) - 1, 0
+                    )
                 else:
-                    st.warning("No images found for your search term.")
+                    selected_idx = 0
+
+                # Show selected image
+                st.image(decrypted_paths[selected_idx], use_container_width=True)
+                st.caption(f"Image {selected_idx + 1} of {len(decrypted_paths)} • Similarity: {similarities[selected_idx]:.2%}")
+
+                # Gallery
+                st.subheader("Gallery")
+                cols = st.columns(4)
+                for i, (path, sim) in enumerate(zip(decrypted_paths, similarities)):
+                    with cols[i % 4]:
+                        st.image(path, use_container_width=True)
+                        st.caption(f"{sim:.1%}")
             else:
-                st.warning("Please enter a search term.")
-        except:
-            st.warning("No images found for your search term. Or some Error occurred, I'm not too sure")
+                st.warning("No results found. Try a different search term.")
 
+# =============================================================================
+# DELETE TAB
+# =============================================================================
 with tab2:
-    st.title("Delete")
-    st.write("comming soon...")
+    st.title("Delete Screenshots")
 
+    stats = db.get_stats()
+    st.write(f"Total screenshots: {stats['total_screenshots']}")
+
+    if st.button("🗑️ Clear All Data", type="secondary"):
+        if st.checkbox("I understand this will delete ALL screenshots permanently"):
+            db.clear_all()
+            # Also clear screenshot files
+            for f in get_screenshots_dir().iterdir():
+                f.unlink()
+            st.success("All data cleared!")
+            st.rerun()
+
+# =============================================================================
+# SETTINGS TAB
+# =============================================================================
 with tab3:
     st.title("Settings")
-    SafeMode_weight = st.slider(
-        "Slide to set SafeMode Weight",
-        min_value=-1.0,
-        max_value=2.5,
-        value=0.8,
-        help="Move the slider to change SafeMode Weight.",
-        step=0.05
-    )
 
+    st.subheader("Capture Mode")
 
     mode_descriptions = {
-        "Normal": "Balanced settings for everyday use",
-        "Games": "Less frequent captures for gaming sessions",
-        "Slow": "Less frequent captures for gaming sessions",
-        "Remember": "Higher sensitivity to capture more details",
-        "Fast": "Higher sensitivity to capture more details",
-        "Presentation": "Optimized for slide decks and presentations",
-        "Video": "Captures key scenes and transitions in videos",
-        "Coding": "Tracks meaningful changes in code editors",
-        "Security": "Minimizes false triggers for surveillance",
-        "Timelapse": "Regular interval captures regardless of content"
+        "normal": "Balanced settings for everyday use",
+        "games": "Less frequent captures for gaming sessions",
+        "fast": "Higher sensitivity to capture more details",
+        "presentation": "Optimized for slide decks and presentations",
+        "video": "Captures key scenes and transitions in videos",
+        "coding": "Tracks meaningful changes in code editors",
+        "security": "Minimizes false triggers for surveillance",
+        "timelapse": "Regular interval captures regardless of content",
     }
-    
-    option = st.selectbox(
-    "Select Capture Mode",
-    ("Normal", "Slow", "Fast", "Games", "Remember", "Presentation", "Video", "Coding", "Security", "Timelapse"),
-)   
-    if option:
-        CaptureStart.CaptureMode(option)
-        st.write(f"You selected: {option} : {mode_descriptions[option]}")
-    st.write("Settings are comming soon...")
 
+    selected_mode = st.selectbox(
+        "Capture Mode",
+        options=list(mode_descriptions.keys()),
+        format_func=lambda x: x.title()
+    )
+
+    if selected_mode:
+        config.capture.set_mode(selected_mode)
+        st.info(mode_descriptions[selected_mode])
+
+    st.divider()
+
+    st.subheader("Capture Settings")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        new_interval = st.number_input(
+            "Interval (seconds)",
+            min_value=0.5,
+            max_value=60.0,
+            value=float(config.capture.interval),
+            step=0.5
+        )
+        config.capture.interval = new_interval
+
+    with col2:
+        new_threshold = st.slider(
+            "Change Threshold",
+            min_value=0.5,
+            max_value=0.99,
+            value=config.capture.threshold,
+            step=0.01,
+            help="Higher = less sensitive (fewer captures)"
+        )
+        config.capture.threshold = new_threshold
+
+    st.divider()
+
+    st.subheader("Storage")
+    st.code(str(config.data_dir))
+
+    st.subheader("Database")
+    st.code(str(config.database_path))
