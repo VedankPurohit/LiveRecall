@@ -10,3 +10,5 @@ Components/VisualProcessing.py
 /flash-attention
 DataOld.json
 /liverecall.egg-info
+/web/.next
+/web/node_modules

@@ -1,0 +1,35 @@
+# LiveRecall Development Setup
+# Run: docker-compose up
+
+version: '3.8'
+
+services:
+  # Python API Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./core:/app/core
+      - ./api:/app/api
+      - ~/.liverecall:/root/.liverecall
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Next.js Frontend
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web/src:/app/src
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - api
+    command: npm run dev

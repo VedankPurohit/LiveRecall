@@ -50,6 +50,7 @@ async def get_system_status():
         total_screenshots=stats["total_screenshots"],
         synced=stats["synced"],
         unsynced=stats["unsynced"],
+        compressed=stats.get("compressed", 0),
     )
 
     # Model status
