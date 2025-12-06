@@ -13,6 +13,9 @@ from api.schemas import (
     ScreenshotList,
     ScreenshotDeleteResponse,
     SuccessResponse,
+    DateRange,
+    DensityBucket,
+    DensityResponse,
 )
 from core.database import db
 from core.config import get_screenshots_dir
@@ -37,14 +40,18 @@ async def list_screenshots(
     offset: int = Query(default=0, ge=0),
     synced_only: bool = Query(default=False),
     unsynced_only: bool = Query(default=False),
+    start_date: Optional[str] = Query(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)"),
+    end_date: Optional[str] = Query(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)"),
 ):
     """
-    List screenshots with pagination.
+    List screenshots with pagination and optional date filtering.
 
     - limit: Max number of results (1-500)
     - offset: Skip N results
     - synced_only: Only show screenshots with embeddings
     - unsynced_only: Only show screenshots without embeddings
+    - start_date: Filter screenshots after this timestamp (YYMMDDHHMMSS format)
+    - end_date: Filter screenshots before this timestamp (YYMMDDHHMMSS format)
     """
     if synced_only and unsynced_only:
         raise HTTPException(
@@ -57,19 +64,100 @@ async def list_screenshots(
         screenshots = db.get_unsynced_screenshots(limit=limit)
         total = db.get_unsynced_count()
     else:
-        screenshots = db.get_all_screenshots(limit=limit, offset=offset)
-        stats = db.get_stats()
+        screenshots = db.get_all_screenshots(
+            limit=limit,
+            offset=offset,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        total = db.get_screenshots_count(start_date=start_date, end_date=end_date)
         if synced_only:
             screenshots = [s for s in screenshots if s["has_embedding"]]
+            # Note: This count is approximate when using synced_only with date filters
+            stats = db.get_stats()
             total = stats["synced"]
-        else:
-            total = stats["total_screenshots"]
 
     return ScreenshotList(
         total=total,
         offset=offset,
         limit=limit,
         screenshots=[db_row_to_screenshot(s) for s in screenshots],
+    )
+
+
+# IMPORTANT: Static routes must come BEFORE dynamic routes
+@router.get("/image")
+async def get_image_by_path(
+    path: str = Query(..., description="Full path to the image file"),
+):
+    """
+    Get an image by its full path.
+    Used by the web frontend to display screenshots.
+    """
+    image_path = Path(path)
+
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    # Security: Only allow serving files from the screenshots directory
+    screenshots_dir = get_screenshots_dir()
+    try:
+        image_path.relative_to(screenshots_dir)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return FileResponse(
+        path=str(image_path),
+        media_type="image/jpeg",
+        filename=image_path.name,
+    )
+
+
+@router.get("/date-range", response_model=DateRange)
+async def get_date_range():
+    """
+    Get the min and max timestamps of all screenshots.
+    Useful for initializing timeline bounds.
+    """
+    date_range = db.get_date_range()
+    return DateRange(
+        min_date=date_range["min_date"],
+        max_date=date_range["max_date"],
+    )
+
+
+@router.get("/density", response_model=DensityResponse)
+async def get_density(
+    buckets: int = Query(default=100, ge=10, le=500, description="Number of time buckets"),
+):
+    """
+    Get screenshot density data for timeline visualization.
+
+    Returns counts of screenshots per time bucket across the entire date range.
+    Used to render the density bar in the timeline scrubber.
+
+    - buckets: Number of time buckets to divide the range into (10-500)
+    """
+    density_data = db.get_density_data(buckets=buckets)
+
+    if not density_data:
+        return DensityResponse(
+            buckets=[],
+            total=0,
+            min_date=None,
+            max_date=None,
+        )
+
+    total = sum(b["count"] for b in density_data)
+
+    return DensityResponse(
+        buckets=[
+            DensityBucket(start=b["start"], end=b["end"], count=b["count"])
+            for b in density_data
+        ],
+        total=total,
+        min_date=density_data[0]["start"] if density_data else None,
+        max_date=density_data[-1]["end"] if density_data else None,
     )
 
 

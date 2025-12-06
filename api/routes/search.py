@@ -27,6 +27,8 @@ async def search_screenshots(request: SearchRequest):
     This loads the CLIP model (if not already loaded) and performs
     semantic similarity search against all synced screenshots.
 
+    Optionally filter by date range using start_date and end_date.
+
     Examples:
     - "blue shirt on amazon"
     - "error message in terminal"
@@ -61,14 +63,29 @@ async def search_screenshots(request: SearchRequest):
             detail=f"Error generating embedding: {str(e)}",
         )
 
-    # Search database
+    # Search database - get more results than needed if filtering by date
+    search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
     try:
-        results = db.search_similar(embedding, limit=request.limit)
+        results = db.search_similar(embedding, limit=search_limit)
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Search error: {str(e)}",
         )
+
+    # Filter by date range if specified
+    if request.start_date or request.end_date:
+        filtered_results = []
+        for r in results:
+            ts = r["timestamp"]
+            if request.start_date and ts < request.start_date:
+                continue
+            if request.end_date and ts > request.end_date:
+                continue
+            filtered_results.append(r)
+            if len(filtered_results) >= request.limit:
+                break
+        results = filtered_results
 
     # Convert to response
     search_results = [
@@ -79,7 +96,7 @@ async def search_screenshots(request: SearchRequest):
             similarity=r["similarity"],
             image_url=f"/api/v1/screenshots/{r['id']}/image",
         )
-        for r in results
+        for r in results[:request.limit]
     ]
 
     return SearchResponse(
@@ -94,15 +111,20 @@ async def quick_search(
     q: str,
     limit: int = 20,
     safe_mode: bool = True,
+    start_date: str = None,
+    end_date: str = None,
 ):
     """
     Quick search with query parameters (simpler than POST).
 
     Example: /api/v1/search/quick?q=blue+shirt&limit=10
+    Example with dates: /api/v1/search/quick?q=meeting&start_date=251201000000&end_date=251206235959
     """
     request = SearchRequest(
         query=q,
         limit=limit,
         safe_mode=safe_mode,
+        start_date=start_date,
+        end_date=end_date,
     )
     return await search_screenshots(request)

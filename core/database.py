@@ -163,17 +163,136 @@ class Database:
             cur.execute("DELETE FROM screenshots WHERE id = ?", (screenshot_id,))
             return cur.rowcount > 0
 
-    def get_all_screenshots(self, limit: Optional[int] = None, offset: int = 0) -> list[dict]:
-        """Get all screenshots with pagination"""
+    def get_all_screenshots(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> list[dict]:
+        """Get all screenshots with pagination and optional date filtering.
+
+        Args:
+            limit: Max results to return
+            offset: Number of results to skip
+            start_date: Filter screenshots after this timestamp (YYMMDDHHMMSS format)
+            end_date: Filter screenshots before this timestamp (YYMMDDHHMMSS format)
+        """
         with self.cursor() as cur:
+            conditions = []
+            params = []
+
+            if start_date:
+                conditions.append("timestamp >= ?")
+                params.append(start_date)
+            if end_date:
+                conditions.append("timestamp <= ?")
+                params.append(end_date)
+
+            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
             if limit:
-                cur.execute(
-                    "SELECT * FROM screenshots ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-                    (limit, offset)
-                )
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
             else:
-                cur.execute("SELECT * FROM screenshots ORDER BY timestamp DESC")
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC"
+
+            cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
+
+    def get_screenshots_count(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> int:
+        """Get count of screenshots with optional date filtering."""
+        with self.cursor() as cur:
+            conditions = []
+            params = []
+
+            if start_date:
+                conditions.append("timestamp >= ?")
+                params.append(start_date)
+            if end_date:
+                conditions.append("timestamp <= ?")
+                params.append(end_date)
+
+            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            cur.execute(f"SELECT COUNT(*) FROM screenshots {where_clause}", params)
+            return cur.fetchone()[0]
+
+    def get_date_range(self) -> dict:
+        """Get the min and max timestamps in the database."""
+        with self.cursor() as cur:
+            cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM screenshots")
+            row = cur.fetchone()
+            return {
+                "min_date": row[0],
+                "max_date": row[1]
+            }
+
+    def get_density_data(self, buckets: int = 100) -> list[dict]:
+        """Get screenshot count per time bucket for timeline density visualization.
+
+        Returns a list of buckets with start timestamp, end timestamp, and count.
+        """
+        from datetime import datetime, timedelta
+
+        with self.cursor() as cur:
+            # Get date range
+            cur.execute("SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM screenshots")
+            row = cur.fetchone()
+            min_ts, max_ts, total = row[0], row[1], row[2]
+
+            if not min_ts or not max_ts or total == 0:
+                return []
+
+            def parse_ts(ts: str) -> datetime:
+                """Convert YYMMDDHHMMSS to datetime."""
+                if len(ts) != 12:
+                    return datetime.now()
+                year = 2000 + int(ts[0:2])
+                month = int(ts[2:4])
+                day = int(ts[4:6])
+                hour = int(ts[6:8])
+                minute = int(ts[8:10])
+                second = int(ts[10:12])
+                return datetime(year, month, day, hour, minute, second)
+
+            def format_ts(dt: datetime) -> str:
+                """Convert datetime back to YYMMDDHHMMSS format."""
+                return dt.strftime("%y%m%d%H%M%S")
+
+            min_dt = parse_ts(min_ts)
+            max_dt = parse_ts(max_ts)
+
+            if max_dt <= min_dt:
+                return [{"start": min_ts, "end": max_ts, "count": total}]
+
+            total_seconds = (max_dt - min_dt).total_seconds()
+            bucket_seconds = total_seconds / buckets
+            result = []
+
+            for i in range(buckets):
+                bucket_start_dt = min_dt + timedelta(seconds=i * bucket_seconds)
+                bucket_end_dt = min_dt + timedelta(seconds=(i + 1) * bucket_seconds)
+
+                start_ts = format_ts(bucket_start_dt)
+                end_ts = format_ts(bucket_end_dt)
+
+                cur.execute(
+                    "SELECT COUNT(*) FROM screenshots WHERE timestamp >= ? AND timestamp < ?",
+                    (start_ts, end_ts)
+                )
+                count = cur.fetchone()[0]
+
+                result.append({
+                    "start": start_ts,
+                    "end": end_ts,
+                    "count": count
+                })
+
+            return result
 
     # --- Embedding operations ---
 

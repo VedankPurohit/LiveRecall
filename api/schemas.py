@@ -155,6 +155,8 @@ class SearchRequest(BaseModel):
     safe_mode_level: SafeModeLevel = Field(default=SafeModeLevel.MID)
     negative_texts: Optional[list[str]] = Field(default=None)
     negative_weight: float = Field(default=1.0, ge=0.0, le=3.0)
+    start_date: Optional[str] = Field(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)")
+    end_date: Optional[str] = Field(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)")
 
     class Config:
         json_schema_extra = {
@@ -162,7 +164,9 @@ class SearchRequest(BaseModel):
                 "query": "blue shirt on website",
                 "limit": 20,
                 "safe_mode": True,
-                "safe_mode_level": "mid"
+                "safe_mode_level": "mid",
+                "start_date": "251201000000",
+                "end_date": "251206235959"
             }
         }
 
@@ -226,6 +230,27 @@ class ScreenshotList(BaseModel):
     screenshots: list[Screenshot]
 
 
+class DateRange(BaseModel):
+    """Date range for screenshots"""
+    min_date: Optional[str] = Field(description="Earliest timestamp (YYMMDDHHMMSS)")
+    max_date: Optional[str] = Field(description="Latest timestamp (YYMMDDHHMMSS)")
+
+
+class DensityBucket(BaseModel):
+    """Single bucket in timeline density data"""
+    start: str = Field(description="Start timestamp (YYMMDDHHMMSS)")
+    end: str = Field(description="End timestamp (YYMMDDHHMMSS)")
+    count: int = Field(description="Number of screenshots in this bucket")
+
+
+class DensityResponse(BaseModel):
+    """Timeline density data for visualization"""
+    buckets: list[DensityBucket]
+    total: int = Field(description="Total screenshots in range")
+    min_date: Optional[str] = Field(description="Earliest timestamp")
+    max_date: Optional[str] = Field(description="Latest timestamp")
+
+
 class ScreenshotDeleteResponse(BaseModel):
     """Response after deleting screenshots"""
     success: bool
@@ -242,6 +267,7 @@ class DatabaseStats(BaseModel):
     total_screenshots: int
     synced: int
     unsynced: int
+    compressed: int = 0
 
 
 class ModelStatus(BaseModel):
