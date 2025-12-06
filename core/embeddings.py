@@ -1,14 +1,31 @@
 """
 LiveRecall Embeddings
 Lazy-loaded CLIP model for generating image and text embeddings
+With auto-unload capability for memory management
 """
+import os
+import time
+import threading
+import warnings
 from typing import Optional
+
+# Suppress HuggingFace warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+warnings.filterwarnings("ignore", message=".*use_fast.*")
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import torch
 from PIL import Image
 
-# Lazy loading - model only loads when first used
+# Lazy loading state
 _model = None
 _device = None
+_last_used: float = 0
+_auto_unload_timer: Optional[threading.Timer] = None
+_lock = threading.Lock()
+
+# Configuration
+AUTO_UNLOAD_SECONDS = 300  # 5 minutes of idle before unloading
 
 
 def _get_device() -> str:
@@ -22,37 +39,123 @@ def _get_device() -> str:
 
 def _load_model():
     """Load the CLIP model (only called once)"""
-    global _model, _device
+    global _model, _device, _last_used
 
-    if _model is not None:
+    with _lock:
+        if _model is not None:
+            _last_used = time.time()
+            return _model
+
+        print("Loading CLIP model (this may take a moment)...")
+
+        from sentence_transformers import SentenceTransformer
+
+        _device = _get_device()
+        print(f"Using device: {_device}")
+
+        try:
+            _model = SentenceTransformer("clip-ViT-L-14", device=_device)
+        except Exception as e:
+            print(f"Error loading on {_device}, falling back to CPU: {e}")
+            _device = "cpu"
+            _model = SentenceTransformer("clip-ViT-L-14", device="cpu")
+
+        _last_used = time.time()
+        print("CLIP model loaded successfully")
+
+        # Start auto-unload timer
+        _schedule_auto_unload()
+
         return _model
 
-    print("Loading CLIP model (this may take a moment)...")
 
-    from sentence_transformers import SentenceTransformer
+def _schedule_auto_unload():
+    """Schedule auto-unload after idle timeout"""
+    global _auto_unload_timer
 
-    _device = _get_device()
-    print(f"Using device: {_device}")
+    # Cancel existing timer
+    if _auto_unload_timer is not None:
+        _auto_unload_timer.cancel()
 
-    try:
-        _model = SentenceTransformer("clip-ViT-L-14", device=_device)
-    except Exception as e:
-        print(f"Error loading on {_device}, falling back to CPU: {e}")
-        _device = "cpu"
-        _model = SentenceTransformer("clip-ViT-L-14", device="cpu")
+    # Schedule new timer
+    _auto_unload_timer = threading.Timer(AUTO_UNLOAD_SECONDS, _check_and_unload)
+    _auto_unload_timer.daemon = True
+    _auto_unload_timer.start()
 
-    print("CLIP model loaded successfully")
-    return _model
+
+def _check_and_unload():
+    """Check if model should be unloaded due to inactivity"""
+    global _last_used
+
+    idle_time = time.time() - _last_used
+    if idle_time >= AUTO_UNLOAD_SECONDS:
+        print(f"CLIP model idle for {idle_time:.0f}s, unloading...")
+        unload_model()
+    else:
+        # Reschedule check
+        _schedule_auto_unload()
+
+
+def unload_model():
+    """Explicitly unload the CLIP model to free memory"""
+    global _model, _device, _auto_unload_timer
+
+    with _lock:
+        if _model is None:
+            return
+
+        print("Unloading CLIP model...")
+
+        # Cancel auto-unload timer
+        if _auto_unload_timer is not None:
+            _auto_unload_timer.cancel()
+            _auto_unload_timer = None
+
+        # Delete model
+        del _model
+        _model = None
+
+        # Clear GPU memory if applicable
+        if _device == "cuda":
+            torch.cuda.empty_cache()
+        elif _device == "mps":
+            # MPS doesn't have explicit cache clearing
+            pass
+
+        _device = None
+        print("CLIP model unloaded")
 
 
 def is_loaded() -> bool:
-    """Check if the model is loaded"""
+    """Check if the model is currently loaded"""
     return _model is not None
+
+
+def get_model_status() -> dict:
+    """Get detailed model status"""
+    return {
+        "loaded": _model is not None,
+        "device": _device,
+        "last_used": _last_used,
+        "idle_seconds": time.time() - _last_used if _last_used > 0 else 0,
+        "auto_unload_seconds": AUTO_UNLOAD_SECONDS,
+    }
+
+
+def set_auto_unload_timeout(seconds: int):
+    """Set the auto-unload timeout (0 to disable)"""
+    global AUTO_UNLOAD_SECONDS
+    AUTO_UNLOAD_SECONDS = seconds
+    if seconds > 0 and _model is not None:
+        _schedule_auto_unload()
 
 
 def get_image_embedding(image_path: str) -> list[float]:
     """Generate embedding for an image file"""
+    global _last_used
+
     model = _load_model()
+    _last_used = time.time()
 
     try:
         image = Image.open(image_path)
@@ -65,7 +168,10 @@ def get_image_embedding(image_path: str) -> list[float]:
 
 def get_text_embedding(text: str) -> list[float]:
     """Generate embedding for a text query"""
+    global _last_used
+
     model = _load_model()
+    _last_used = time.time()
 
     try:
         embedding = model.encode(text, convert_to_tensor=False)
@@ -143,7 +249,7 @@ def get_safe_search_embedding(
     safe_mode_level: str = "mid"
 ) -> list[float]:
     """Generate embedding with safe mode filtering"""
-    weight = SAFE_MODE_WEIGHTS.get(safe_mode_level, 1.2)
+    weight = SAFE_MODE_WEIGHTS.get(safe_mode_level.lower(), 1.2)
 
     return get_combined_embedding(
         base_text=text,
@@ -155,13 +261,16 @@ def get_safe_search_embedding(
 if __name__ == "__main__":
     # Test embeddings
     print("Testing embeddings module...")
+    print(f"Status: {get_model_status()}")
 
-    # Test text embedding
+    # Test text embedding (this will load the model)
     text_emb = get_text_embedding("a blue shirt on a website")
     print(f"Text embedding shape: {len(text_emb)}")
+    print(f"Status after load: {get_model_status()}")
 
-    # Test image embedding (if you have a test image)
-    # img_emb = get_image_embedding("/path/to/test.jpg")
-    # print(f"Image embedding shape: {len(img_emb)}")
+    # Test unload
+    print("Testing unload...")
+    unload_model()
+    print(f"Status after unload: {get_model_status()}")
 
     print("Done!")

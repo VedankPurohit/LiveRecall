@@ -27,6 +27,11 @@ dependencies = [
     "torch==2.3.0",
     "transformers>=4.55.2",
 
+    # API
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pydantic>=2.0.0",
+
     # UI (legacy - will be replaced)
     "streamlit==1.32.2",
 ]
