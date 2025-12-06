@@ -41,66 +41,85 @@ def get_oldest_timestamp(image_dir):
         return time.strftime("%y%m%d%H%M%S")
     return str(int(oldest_time) - 100000)
 
-def migrate_images_to_db(image_dir="CapturedData"):
+def migrate_images_to_db(image_dir="CapturedData", rebuild=False):
     """
-    Migrate all images from a directory to the database
-    
+    Migrate images from a directory to the database.
+    If rebuild is True, it deletes everything in the database and then adds all images.
+    If rebuild is False (default), it only adds images that are not already in the database.
+
     Args:
-        image_dir: Directory containing image files
-        
-    Returns:
-        int: Number of images processed
-    """
-    print(f"Starting migration from {image_dir} directory to database...")
+        image_dir (str): Directory containing image files.
+        rebuild (bool): Whether to rebuild the database.
     
-    # Initialize database
+    Returns:
+        int: Number of images successfully migrated.
+    """
+    print(f"Starting migration from '{image_dir}' to the database.")
+    
     db.connect()
     db.initialize_memory_tables()
-    
-    # Get the oldest timestamp to use as fallback
+    print("Database initialized successfully.")
+
+    if rebuild:
+        print("Rebuild mode enabled: Deleting all existing image records from the database.")
+        try:
+            db.execute("DELETE FROM LiveRecall")
+            print("Database cleared successfully.")
+        except Exception as e:
+            print(f"Error clearing the database: {e}")
+            db.disconnect()
+            return 0
+    print("Fetching oldest timestamp...")
     oldest_timestamp = get_oldest_timestamp(image_dir)
-    print(f"Oldest timestamp found: {oldest_timestamp}")
-    
-    # Process all images
-    count = 0
-    error_count = 0
-    
-    # Get list of image files
+    print(f"Oldest timestamp for fallback: {oldest_timestamp}")
+
     image_files = [f for f in os.listdir(image_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
     total_files = len(image_files)
-    print(f"Found {total_files} image files to process")
-    
-    for filename in image_files:
+    print(f"Found {total_files} images to process.")
+
+    migrated_count = 0
+    skipped_count = 0
+    error_count = 0
+
+    for i, filename in enumerate(image_files):
+        image_path = os.path.join(image_dir, filename)
+        
         try:
-            # Full path to image
-            image_path = os.path.join(image_dir, filename)
-            
-            # Extract timestamp or use oldest as fallback
+            if not rebuild:
+                # This assumes a 'fetchone' method exists in the DB_Connection module.
+                exists_query = "SELECT 1 FROM LiveRecall WHERE image_path = %s"
+                result = db.cur.fetchone(exists_query, (image_path,))
+                if result:
+                    skipped_count += 1
+                    continue
+
             timestamp = extract_timestamp_from_filename(filename) or oldest_timestamp
             
-            # Compute embedding
-            print(f"Processing {filename}...")
             embedding = ClipMode.ImgEmb(image_path)
             embedding_list = embedding.tolist()
             
-            # Insert into database
-            query = """
+            insert_query = """
                 INSERT INTO LiveRecall (image_path, embedding, timestamp)
                 VALUES (%s, %s, %s)
             """
-            db.execute(query, (image_path, embedding_list, timestamp))
-            count += 1
+            db.execute(insert_query, (image_path, embedding_list, timestamp))
+            migrated_count += 1
             
-            if count % 10 == 0:
-                print(f"Processed {count}/{total_files} images")
-                
+            if (migrated_count) % 10 == 0 and migrated_count > 0:
+                print(f"Migrated {migrated_count} new images...")
+
         except Exception as e:
             print(f"Error processing {filename}: {e}")
             error_count += 1
+
+    print("\nMigration complete.")
+    print(f"Successfully migrated: {migrated_count}")
+    print(f"Skipped (already exist): {skipped_count}")
+    print(f"Errors: {error_count}")
     
-    print(f"Migration complete. Processed {count} images with {error_count} errors.")
     db.disconnect()
-    return count
+    return migrated_count
+
 
 
 print("Debug: Script started")
@@ -111,7 +130,7 @@ if __name__ == "__main__":
     print("Hi")
     
     # Run the migration
-    print(get_oldest_timestamp(image_dir="CapturedData"))
+    print(f"Oldest timestamp: {get_oldest_timestamp(image_dir='CapturedData')}")
     processed_count = migrate_images_to_db()
     
     # Calculate and display elapsed time

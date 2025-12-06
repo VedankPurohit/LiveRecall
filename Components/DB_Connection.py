@@ -16,7 +16,7 @@ class DBConnection:
             return True
         except Exception as e:
             print(f"Error connecting to database: {e}")
-            return False
+            raise Exception("Failed to connect to the database.")
             
     def disconnect(self):
         if self.cur:
@@ -42,6 +42,7 @@ class DBConnection:
         
     def fetch_one(self):
         return self.cur.fetchone()
+    
         
     def initialize_memory_tables(self):
         """Create the necessary tables if they don't exist"""

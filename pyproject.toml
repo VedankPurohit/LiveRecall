@@ -1,0 +1,22 @@
+[project]
+name = "liverecall"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy==1.26.0",
+    "opencv_python==4.9.0.80",
+    "opencv_python_headless==4.9.0.80",
+    "pillow==10.3.0",
+    "sentence-transformers==2.7.0",
+    "scikit-image",
+    "streamlit==1.32.2",
+    "torch==2.3.0",
+    "pgvector>=0.4.1",
+    "psycopg2>=2.9.10",
+    "psycopg2-binary>=2.9.10",
+    "requests>=2.32.4",
+    "tqdm>=4.67.1",
+    "transformers>=4.55.2",
+]
