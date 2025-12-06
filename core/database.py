@@ -69,7 +69,7 @@ class Database:
     def _initialize_tables(self):
         """Create tables if they don't exist"""
         with self.cursor() as cur:
-            # Main screenshots table
+            # Main screenshots table (base schema without compression columns for migration compatibility)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS screenshots (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +79,9 @@ class Database:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Migration: add compression columns if they don't exist
+            self._migrate_compression_columns(cur)
 
             # Index for faster queries
             cur.execute("""
@@ -91,6 +94,11 @@ class Database:
                 ON screenshots(has_embedding)
             """)
 
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_screenshots_is_compressed
+                ON screenshots(is_compressed)
+            """)
+
             # Virtual table for vector search
             cur.execute(f"""
                 CREATE VIRTUAL TABLE IF NOT EXISTS screenshot_embeddings
@@ -99,6 +107,21 @@ class Database:
                     embedding float[{EMBEDDING_DIM}]
                 )
             """)
+
+    def _migrate_compression_columns(self, cur):
+        """Add compression columns to existing databases"""
+        # Check if columns exist
+        cur.execute("PRAGMA table_info(screenshots)")
+        columns = {row[1] for row in cur.fetchall()}
+
+        if "is_compressed" not in columns:
+            cur.execute("ALTER TABLE screenshots ADD COLUMN is_compressed INTEGER DEFAULT 0")
+
+        if "original_size_bytes" not in columns:
+            cur.execute("ALTER TABLE screenshots ADD COLUMN original_size_bytes INTEGER")
+
+        if "compressed_at" not in columns:
+            cur.execute("ALTER TABLE screenshots ADD COLUMN compressed_at TEXT")
 
     # --- Screenshot CRUD ---
 
@@ -231,6 +254,71 @@ class Database:
 
             return results
 
+    # --- Compression operations ---
+
+    def get_compressible_screenshots(self, older_than_days: int, limit: Optional[int] = None) -> list[dict]:
+        """Get screenshots eligible for compression (old + not compressed)"""
+        with self.cursor() as cur:
+            query = """
+                SELECT * FROM screenshots
+                WHERE is_compressed = 0
+                AND created_at < datetime('now', ?)
+                ORDER BY created_at ASC
+            """
+            days_ago = f"-{older_than_days} days"
+
+            if limit:
+                query += " LIMIT ?"
+                cur.execute(query, (days_ago, limit))
+            else:
+                cur.execute(query, (days_ago,))
+
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_compressible_count(self, older_than_days: int) -> int:
+        """Get count of screenshots eligible for compression"""
+        with self.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM screenshots
+                WHERE is_compressed = 0
+                AND created_at < datetime('now', ?)
+            """, (f"-{older_than_days} days",))
+            return cur.fetchone()[0]
+
+    def mark_compressed(
+        self,
+        screenshot_id: int,
+        original_size: int,
+    ) -> bool:
+        """Mark a screenshot as compressed"""
+        with self.cursor() as cur:
+            cur.execute("""
+                UPDATE screenshots
+                SET is_compressed = 1,
+                    original_size_bytes = ?,
+                    compressed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (original_size, screenshot_id))
+            return cur.rowcount > 0
+
+    def get_compression_stats(self) -> dict:
+        """Get compression statistics"""
+        with self.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM screenshots WHERE is_compressed = 1")
+            compressed_count = cur.fetchone()[0]
+
+            cur.execute("SELECT COUNT(*) FROM screenshots WHERE is_compressed = 0")
+            uncompressed_count = cur.fetchone()[0]
+
+            cur.execute("SELECT SUM(original_size_bytes) FROM screenshots WHERE is_compressed = 1")
+            original_total = cur.fetchone()[0] or 0
+
+            return {
+                "compressed_count": compressed_count,
+                "uncompressed_count": uncompressed_count,
+                "original_size_bytes": original_total,
+            }
+
     # --- Stats ---
 
     def get_stats(self) -> dict:
@@ -245,10 +333,14 @@ class Database:
             cur.execute("SELECT COUNT(*) FROM screenshots WHERE has_embedding = 0")
             unsynced = cur.fetchone()[0]
 
+            cur.execute("SELECT COUNT(*) FROM screenshots WHERE is_compressed = 1")
+            compressed = cur.fetchone()[0]
+
             return {
                 "total_screenshots": total,
                 "synced": synced,
                 "unsynced": unsynced,
+                "compressed": compressed,
             }
 
     def clear_all(self) -> bool:
