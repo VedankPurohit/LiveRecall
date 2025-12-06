@@ -1,140 +1,154 @@
 # LiveRecall
 
-Welcome to **LiveRecall**, the open-source alternative to Microsoft's Recall. LiveRecall captures snapshots of your screen and allows you to recall them using natural language queries, leveraging semantic search technology. For added security, all images are encrypted.
-
-Get an idea of what Microsoft Recall is -
-[Tweet](https://x.com/elonmusk/status/1792690964672450971?t=LeVxPsxW0VopuLltIBfWdA&s=19)
-
-[Security risks of Recall AI by Microsoft](https://github.com/xaitax/TotalRecall)
-
-## Overview
-
-### What Does LiveRecall Do?
-
-LiveRecall is designed to help you easily find and recall specific moments you’ve seen on your screen. Imagine these scenarios:
-
-- You saw a blue shirt online but can’t remember where.
-- You received a meme or message but can’t recall who sent it or on which platform.
-
-![LiveRecall Infrance](Images/Screenshot%202024-06-13%20083549.png)
-
-LiveRecall addresses these needs by capturing screenshots whenever a change is detected on your screen and at regular intervals. This data is then used for recall, allowing you to describe what you’re looking for in natural language, and the appropriate image will be shown.
+**LiveRecall** is an open-source screen recall application with semantic search. It captures screenshots of your screen and lets you find them using natural language queries.
 
 ## Features
 
-- **Open Source**: Fully transparent and community-driven development.
-- **Semantic Search**: Retrieve your snapshots using simple natural language descriptions.
-- **Continuous Capture**: Takes screenshots when changes are detected and at specified intervals.
-- **Encryption**: Ensures your screenshots are securely stored with simple encryption (enhanced encryption is on the way).
+- **Semantic Search** - Find screenshots by describing what you're looking for
+- **Smart Capture** - Only saves when screen content changes
+- **System Tray App** - Runs quietly in your menu bar
+- **Web Interface** - Beautiful timeline and search UI
+- **Local & Private** - All data stays on your machine
+- **Cross-Platform** - macOS, Windows, Linux
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-Ensure you have the following installed on your machine:
-
-- [Git](https://git-scm.com/downloads)
-  or just download this as a zip from above green button
-
-Note- There are bugs and persofamace issues which will be solved alongside a good GUI.
-The Decision to not add a databse was done to remove friction. an oprtion to add Postgree will be added soon
+- Python 3.10+
+- Node.js 18+ (for web UI)
+- [uv](https://github.com/astral-sh/uv) (recommended) or pip
 
 ### Installation
 
-1. **Clone the repository or download the code directly:**
+```bash
+# Clone the repository
+git clone https://github.com/VedankPurohit/LiveRecall.git
+cd LiveRecall
 
-   ```bash
-   git clone https://github.com/VedankPurohit/LiveRecall.git
-   ```
+# Install Python dependencies
+uv sync
 
-2. **Navigate to the project directory:**
+# Install web UI dependencies
+cd web && npm install && cd ..
+```
 
-   ```bash
-   cd LiveRecall
-   ```
+### Running
 
-3. **Run the setup script (only required the first time):**
+**Option 1: System Tray App** (recommended)
+```bash
+python main.py
+```
+This launches the menu bar app which manages everything.
 
-   On Windows:
+**Option 2: API Server Only**
+```bash
+python main.py --api-only
+```
 
-   ```bash
-   setup.bat
-   ```
+**Option 3: Web UI Development**
+```bash
+# Terminal 1: Start API
+python main.py --api-only
 
-   Cli - Python Must be installed
+# Terminal 2: Start web UI
+cd web && npm run dev
+```
 
-   ```
-   pip install -r requirements.txt
-   ```
+Then open http://localhost:3000
 
-   This process will take some time as it sets up the necessary environment and dependencies.
+## Architecture
 
-4. **Launch the application:**
+```
+LiveRecall/
+├── core/           # Core functionality
+│   ├── capture.py      # Screen capture service
+│   ├── database.py     # SQLite + vector search
+│   ├── embeddings.py   # CLIP model (lazy loaded)
+│   ├── processor.py    # Background sync service
+│   └── compression.py  # Image compression
+├── api/            # FastAPI backend
+│   ├── main.py         # App entry point
+│   └── routes/         # API endpoints
+├── tray/           # System tray application
+│   ├── app.py          # Main tray app
+│   ├── menu.py         # Menu builder
+│   └── backend.py      # Subprocess manager
+├── web/            # Next.js web interface
+│   └── src/
+│       ├── app/        # Pages
+│       ├── components/ # UI components
+│       └── lib/        # API client
+├── tests/          # Test suite
+└── main.py         # Entry point
+```
 
-   On Windows:
+## How It Works
 
-   ```bash
-   run.bat
-   ```
+1. **Capture**: Screenshots are taken at regular intervals when screen content changes
+2. **Storage**: Images saved to `~/Library/Application Support/LiveRecall/` (macOS)
+3. **Sync**: CLIP model generates embeddings for semantic search (runs on-demand)
+4. **Search**: Natural language queries matched against embeddings
 
-   Cli
+## API Endpoints
 
-   ```
-   streamlit run app.py
-   ```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/status` | GET | System status |
+| `/api/v1/recording/start` | POST | Start capture |
+| `/api/v1/recording/stop` | POST | Stop capture |
+| `/api/v1/sync/start` | POST | Start embedding sync |
+| `/api/v1/search` | POST | Semantic search |
+| `/api/v1/screenshots` | GET | List screenshots |
 
-   The duration depends on your internet connection as all required models will be downloaded.
+Full API docs at http://localhost:8742/docs
 
-5. **Access the web interface:**
+## Configuration
 
-   After running `run.bat`, a URL will be displayed. Click on the URL to open the web interface. Once everything is loaded, you will see a screen similar to this:
+Settings available in the web UI or via API:
 
-   ![LiveRecall Interface](Images/Screenshot%202024-06-13%20082741.png)
+- **Capture Mode**: normal, games, fast, coding, video, presentation
+- **Capture Interval**: 1-10 seconds
+- **Quality**: 50-100%
+- **Safe Mode**: Filter sensitive content from search
+- **Auto-compress**: Compress old screenshots
 
-6. **Encryption Password:**
+## Privacy & Security
 
-   - Enter a simple password for encryption and decryption.
-     ![LiveRecall Password](Images/Screenshot%202024-06-13%20082759.png)
+- All data stored locally on your machine
+- No cloud sync or telemetry
+- Screenshots stored in user's application data folder
+- Optional encryption (coming soon)
 
-   - **Important**: This password is not stored for security reasons, so make sure to remember it.
-   - An enhanced encryption method is coming soon.
+See [Privacy and Security](Privacy%20and%20Security.md) for details.
 
-7. **Start and Stop Capture:**
+## Development
 
-   - Click **Start** to begin capturing snapshots.
-   - Click **Stop** to stop capturing and save the data.
+```bash
+# Run tests
+uv run pytest
 
-8. **Search Snapshots:**
+# Run with coverage
+uv run pytest --cov=core --cov=api
 
-   Use the search bar to retrieve your screenshots using natural language queries.
-
-## Privacy and Security
-
-For detailed information on privacy and security of this project, please refer to the [Privacy and Security](https://github.com/VedankPurohit/LiveRecall/blob/main/Privacy%20and%20Security.md) document.
-
-## Upcoming Features
-
-- Proper Database Support
-- Performace Improvement
-- Snapshot Timeline
-- Optimized Storage
-- Improved Encryption
-- Better GUI
-- And more...
+# Type checking (if using mypy)
+uv run mypy core/ api/
+```
 
 ## Contributing
 
-We welcome contributions from the community! If you'd like to contribute, please fork the repository and create a pull request. For major changes, please open an issue first to discuss what you would like to change.
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE)
 
 ## Contact
 
-If you have any questions, feel free to reach out:
-
-- GitHub: [VedankPurohit](https://github.com/VedankPurohit)
-
-Enjoy using LiveRecall!
-And if you like it, give it an star
+- GitHub: [@VedankPurohit](https://github.com/VedankPurohit)

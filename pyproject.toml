@@ -1,7 +1,7 @@
 [project]
 name = "liverecall"
 version = "0.1.0"
-description = "Add your description here"
+description = "Open-source screen recall with semantic search"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -31,9 +31,6 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "pydantic>=2.0.0",
-
-    # UI (legacy - will be replaced)
-    "streamlit==1.32.2",
 
     # System tray
     "pystray>=0.19.0",
