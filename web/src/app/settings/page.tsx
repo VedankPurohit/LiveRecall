@@ -27,6 +27,11 @@ const SAFE_MODE_LEVELS = [
   { value: 'extreme', label: 'Extreme' },
 ];
 
+const SIMILARITY_METRICS = [
+  { value: 'cosine', label: 'Cosine Similarity' },
+  { value: 'distance', label: 'Inverse Distance' },
+];
+
 export default function SettingsPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -187,26 +192,22 @@ export default function SettingsPage() {
                 ))}
               </select>
             </Row>
-            <Row label="Interval" value={`${config.capture.interval}s`}>
-              <input
-                type="range"
+            <Row label="Check Frequency" value={`${config.capture.interval}s`}>
+              <Slider
                 min={1}
                 max={10}
                 step={0.5}
                 value={config.capture.interval}
-                onChange={(e) => handleUpdate({ capture_interval: Number(e.target.value) })}
-                className="w-20 accent-[#86efac]"
+                onChange={(val) => handleUpdate({ capture_interval: val })}
               />
             </Row>
             <Row label="Quality" value={`${config.capture.quality}%`}>
-              <input
-                type="range"
+              <Slider
                 min={50}
                 max={100}
                 step={5}
                 value={config.capture.quality}
-                onChange={(e) => handleUpdate({ capture_quality: Number(e.target.value) })}
-                className="w-20 accent-[#86efac]"
+                onChange={(val) => handleUpdate({ capture_quality: val })}
               />
             </Row>
           </Section>
@@ -244,6 +245,17 @@ export default function SettingsPage() {
                 </select>
               </Row>
             )}
+            <Row label="Similarity">
+              <select
+                value={config.similarity_metric}
+                onChange={(e) => handleUpdate({ similarity_metric: e.target.value as 'cosine' | 'distance' })}
+                className="bg-[#0f0f0f] text-[#f5f5f5] px-2 py-1 rounded border border-[#1e1e1e] text-xs focus:border-[#86efac]/50 focus:outline-none"
+              >
+                {SIMILARITY_METRICS.map((metric) => (
+                  <option key={metric.value} value={metric.value}>{metric.label}</option>
+                ))}
+              </select>
+            </Row>
           </Section>
 
           {/* Storage */}
@@ -256,14 +268,12 @@ export default function SettingsPage() {
             </Row>
             {config.compression.enabled && (
               <Row label="After" value={`${config.compression.after_days} days`}>
-                <input
-                  type="range"
+                <Slider
                   min={7}
                   max={180}
                   step={7}
                   value={config.compression.after_days}
-                  onChange={(e) => handleUpdate({ compression_after_days: Number(e.target.value) })}
-                  className="w-20 accent-[#86efac]"
+                  onChange={(val) => handleUpdate({ compression_after_days: val })}
                 />
               </Row>
             )}
@@ -361,5 +371,58 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
         }`}
       />
     </button>
+  );
+}
+
+function Slider({
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (val: number) => void;
+}) {
+  const percentage = ((value - min) / (max - min)) * 100;
+
+  return (
+    <div className="relative w-24 h-5 flex items-center">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer slider-green"
+        style={{
+          background: `linear-gradient(to right, #86efac ${percentage}%, #333 ${percentage}%)`,
+        }}
+      />
+      <style jsx>{`
+        .slider-green::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #86efac;
+          cursor: pointer;
+          border: 2px solid #000;
+        }
+        .slider-green::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #86efac;
+          cursor: pointer;
+          border: 2px solid #000;
+        }
+      `}</style>
+    </div>
   );
 }

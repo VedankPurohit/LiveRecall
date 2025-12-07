@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from api.routes import recording, sync, search, screenshots, status, compression
 from core.database import db
@@ -96,6 +96,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Middleware to strip trailing slashes from API routes
+@app.middleware("http")
+async def strip_trailing_slash(request: Request, call_next):
+    """Redirect API requests with trailing slashes to non-trailing slash version"""
+    path = request.url.path
+    # Only handle /api/ routes with trailing slash (but not just "/api/")
+    if path.startswith("/api/") and path.endswith("/") and len(path) > 5:
+        # Preserve query string
+        new_path = path.rstrip("/")
+        if request.url.query:
+            new_url = f"{new_path}?{request.url.query}"
+        else:
+            new_url = new_path
+        return RedirectResponse(url=new_url, status_code=307)
+    return await call_next(request)
+
 
 # Include routers
 app.include_router(status.router, prefix="/api/v1")

@@ -16,6 +16,7 @@ from api.schemas import (
     SuccessResponse,
     CaptureMode,
     SafeModeLevel,
+    SimilarityMetric,
 )
 from core.database import db
 from core.capture import capture_service
@@ -97,6 +98,7 @@ async def get_config():
         encryption_enabled=config.encryption_enabled,
         safe_mode_enabled=config.safe_mode_enabled,
         safe_mode_level=SafeModeLevel(config.safe_mode_level),
+        similarity_metric=SimilarityMetric(config.similarity_metric),
         auto_unload_seconds=get_model_status()["auto_unload_seconds"],
     )
 
@@ -146,6 +148,10 @@ async def update_config(request: ConfigUpdateRequest):
         config.compression.quality = request.compression_quality
         updated.append(f"compression_quality={request.compression_quality}")
 
+    if request.similarity_metric is not None:
+        config.similarity_metric = request.similarity_metric.value
+        updated.append(f"similarity_metric={request.similarity_metric.value}")
+
     if request.auto_unload_seconds is not None:
         set_auto_unload_timeout(request.auto_unload_seconds)
         updated.append(f"auto_unload_seconds={request.auto_unload_seconds}")
@@ -155,6 +161,9 @@ async def update_config(request: ConfigUpdateRequest):
             success=True,
             message="No changes made",
         )
+
+    # Save config to disk so settings persist across restarts
+    config.save()
 
     return SuccessResponse(
         success=True,

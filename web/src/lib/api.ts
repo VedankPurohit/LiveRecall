@@ -57,6 +57,7 @@ export async function updateConfig(updates: Partial<{
   compression_quality: number;
   safe_mode_enabled: boolean;
   safe_mode_level: string;
+  similarity_metric: 'cosine' | 'distance';
   model_auto_unload_seconds: number;
 }>): Promise<ApiResponse<void>> {
   return fetchApi('/config', {

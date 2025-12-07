@@ -340,9 +340,17 @@ class Database:
         self,
         query_embedding: list[float],
         limit: int = 10,
-        min_similarity: float = 0.0
+        min_similarity: float = 0.0,
+        similarity_metric: str = "cosine"
     ) -> list[dict]:
-        """Search for similar screenshots using vector similarity"""
+        """Search for similar screenshots using vector similarity
+
+        Args:
+            query_embedding: The query embedding vector
+            limit: Maximum number of results
+            min_similarity: Minimum similarity threshold
+            similarity_metric: "cosine" for cosine similarity or "distance" for 1/(1+L2)
+        """
         if len(query_embedding) != EMBEDDING_DIM:
             raise ValueError(f"Query embedding must be {EMBEDDING_DIM} dimensions")
 
@@ -350,7 +358,6 @@ class Database:
 
         with self.cursor() as cur:
             # sqlite-vec uses L2 distance, lower is more similar
-            # We convert to similarity score (1 / (1 + distance))
             cur.execute("""
                 SELECT
                     s.*,
@@ -365,13 +372,18 @@ class Database:
             results = []
             for row in cur.fetchall():
                 result = dict(row)
-                # Convert L2 distance to cosine similarity
-                # For normalized vectors: L2² = 2(1 - cosine_sim)
-                # So: cosine_sim = 1 - L2²/2
                 distance = result.pop("vec_distance", 0)
-                # Clamp to valid range (numerical precision issues)
-                cosine_sim = max(0.0, min(1.0, 1.0 - (distance ** 2) / 2))
-                result["similarity"] = cosine_sim
+
+                if similarity_metric == "cosine":
+                    # Convert L2 distance to cosine similarity
+                    # For normalized vectors: L2² = 2(1 - cosine_sim)
+                    # So: cosine_sim = 1 - L2²/2
+                    similarity = max(0.0, min(1.0, 1.0 - (distance ** 2) / 2))
+                else:
+                    # Use inverse distance: 1 / (1 + distance)
+                    similarity = 1.0 / (1.0 + distance)
+
+                result["similarity"] = similarity
                 if result["similarity"] >= min_similarity:
                     results.append(result)
 

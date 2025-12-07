@@ -10,6 +10,7 @@ from api.schemas import (
     SearchResult,
 )
 from core.database import db
+from core.config import config
 from core.embeddings import (
     get_text_embedding,
     get_combined_embedding,
@@ -66,7 +67,11 @@ async def search_screenshots(request: SearchRequest):
     # Search database - get more results than needed if filtering by date
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
     try:
-        results = db.search_similar(embedding, limit=search_limit)
+        results = db.search_similar(
+            embedding,
+            limit=search_limit,
+            similarity_metric=config.similarity_metric
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
