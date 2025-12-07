@@ -9,9 +9,24 @@
 - **System Tray App** - Runs quietly in your menu bar
 - **Web Interface** - Beautiful timeline and search UI
 - **Local & Private** - All data stays on your machine
-- **Cross-Platform** - macOS, Windows, Linux
+- **GPU Accelerated** - Uses MPS on Apple Silicon, CUDA on Windows
 
-## Quick Start
+## Download
+
+### macOS (Apple Silicon)
+
+1. Download the latest DMG from [Releases](https://github.com/VedankPurohit/LiveRecall/releases)
+2. Open the DMG and drag LiveRecall to Applications
+3. Launch LiveRecall from Applications
+4. Grant **Screen Recording** permission when prompted (System Settings > Privacy & Security > Screen Recording)
+
+**Note:** On first launch, the CLIP model (~400MB) will be downloaded automatically.
+
+### Windows / Intel Mac
+
+Coming soon! For now, follow the development installation below.
+
+## Quick Start (Development)
 
 ### Prerequisites
 
