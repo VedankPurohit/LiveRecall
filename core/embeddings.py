@@ -150,8 +150,18 @@ def set_auto_unload_timeout(seconds: int):
         _schedule_auto_unload()
 
 
+def _normalize(embedding) -> list[float]:
+    """Normalize embedding to unit length for cosine similarity"""
+    import numpy as np
+    arr = np.array(embedding)
+    norm = np.linalg.norm(arr)
+    if norm > 0:
+        arr = arr / norm
+    return arr.tolist()
+
+
 def get_image_embedding(image_path: str) -> list[float]:
-    """Generate embedding for an image file"""
+    """Generate normalized embedding for an image file"""
     global _last_used
 
     model = _load_model()
@@ -160,14 +170,14 @@ def get_image_embedding(image_path: str) -> list[float]:
     try:
         image = Image.open(image_path)
         embedding = model.encode(image, convert_to_tensor=False)
-        return embedding.tolist()
+        return _normalize(embedding)
     except Exception as e:
         print(f"Error generating image embedding: {e}")
         raise
 
 
 def get_text_embedding(text: str) -> list[float]:
-    """Generate embedding for a text query"""
+    """Generate normalized embedding for a text query"""
     global _last_used
 
     model = _load_model()
@@ -175,7 +185,7 @@ def get_text_embedding(text: str) -> list[float]:
 
     try:
         embedding = model.encode(text, convert_to_tensor=False)
-        return embedding.tolist()
+        return _normalize(embedding)
     except Exception as e:
         print(f"Error generating text embedding: {e}")
         raise

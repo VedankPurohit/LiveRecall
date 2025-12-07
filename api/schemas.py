@@ -157,7 +157,7 @@ class SearchRequest(BaseModel):
     """Search request"""
     query: str = Field(..., min_length=1, max_length=500)
     limit: int = Field(default=20, ge=1, le=100)
-    safe_mode: bool = Field(default=True)
+    safe_mode: bool = Field(default=False)  # Off by default for personal recall app
     safe_mode_level: SafeModeLevel = Field(default=SafeModeLevel.MID)
     negative_texts: Optional[list[str]] = Field(default=None)
     negative_weight: float = Field(default=1.0, ge=0.0, le=3.0)
