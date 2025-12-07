@@ -3,6 +3,7 @@ Main system tray application
 """
 import threading
 import time
+import webbrowser
 from typing import Optional
 
 import pystray
@@ -12,6 +13,7 @@ from .api_client import api_client, SystemStatus
 from .backend import backend_manager
 from .icons import get_app_icon
 from .menu import MenuBuilder
+from core.updater import check_for_updates_async, VERSION
 
 
 class TrayApp:
@@ -23,6 +25,7 @@ class TrayApp:
         self._status = SystemStatus()
         self._running = False
         self._poll_thread: Optional[threading.Thread] = None
+        self._update_info: Optional[dict] = None
 
     def _on_toggle_recording(self):
         """Handle recording toggle"""
@@ -45,6 +48,19 @@ class TrayApp:
         self._running = False
         self.stop()
 
+    def _on_update_available(self, update_info: Optional[dict]):
+        """Callback when update check completes"""
+        if update_info:
+            self._update_info = update_info
+            print(f"Update available: v{update_info['latest_version']}")
+            # Update menu to show update option
+            self._update_menu()
+
+    def _on_download_update(self):
+        """Open browser to download update"""
+        if self._update_info:
+            webbrowser.open(self._update_info["release_url"])
+
     def _poll_status(self):
         """Poll API for current status"""
         healthy = api_client.health_check()
@@ -64,7 +80,7 @@ class TrayApp:
             return
 
         # Update menu (icon stays the same)
-        self._menu_builder.update_status(self._status)
+        self._menu_builder.update_status(self._status, self._update_info)
         self._icon.menu = self._menu_builder.build()
 
     def _poll_loop(self):
@@ -88,6 +104,7 @@ class TrayApp:
             on_sync=self._on_sync,
             on_set_mode=self._on_set_mode,
             on_quit=self._on_quit,
+            on_download_update=self._on_download_update,
         )
 
         # Initial status poll
@@ -106,8 +123,11 @@ class TrayApp:
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
 
+        # Check for updates in background
+        check_for_updates_async(self._on_update_available)
+
         # Run tray (blocking)
-        print("LiveRecall tray started")
+        print(f"LiveRecall v{VERSION} tray started")
         self._icon.run()
 
     def stop(self):

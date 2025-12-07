@@ -37,10 +37,12 @@ debug.log
 # Web UI
 web/.next/
 web/node_modules/
+web/out/
 
 # Build artifacts
 liverecall.egg-info/
 flash-attention/
+assets/
 
 # Temporary files
 Temp/
