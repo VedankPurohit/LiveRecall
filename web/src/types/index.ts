@@ -74,6 +74,7 @@ export interface AppConfig {
   encryption_enabled: boolean;
   safe_mode_enabled: boolean;
   safe_mode_level: string;
+  similarity_metric: 'cosine' | 'distance';
   model_auto_unload_seconds: number;
 }
 

@@ -10,6 +10,7 @@ from api.schemas import (
     SearchResult,
 )
 from core.database import db
+from core.config import config
 from core.embeddings import (
     get_text_embedding,
     get_combined_embedding,
@@ -66,7 +67,11 @@ async def search_screenshots(request: SearchRequest):
     # Search database - get more results than needed if filtering by date
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
     try:
-        results = db.search_similar(embedding, limit=search_limit)
+        results = db.search_similar(
+            embedding,
+            limit=search_limit,
+            similarity_metric=config.similarity_metric
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -110,12 +115,15 @@ async def search_screenshots(request: SearchRequest):
 async def quick_search(
     q: str,
     limit: int = 20,
-    safe_mode: bool = True,
+    safe_mode: bool = False,
     start_date: str = None,
     end_date: str = None,
 ):
     """
     Quick search with query parameters (simpler than POST).
+
+    Safe mode is OFF by default for personal recall apps.
+    Enable it to filter potentially sensitive content from results.
 
     Example: /api/v1/search/quick?q=blue+shirt&limit=10
     Example with dates: /api/v1/search/quick?q=meeting&start_date=251201000000&end_date=251206235959

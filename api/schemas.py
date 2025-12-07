@@ -35,6 +35,12 @@ class SafeModeLevel(str, Enum):
     EXTREME = "extreme"
 
 
+class SimilarityMetric(str, Enum):
+    """Similarity calculation method"""
+    COSINE = "cosine"
+    DISTANCE = "distance"
+
+
 # =============================================================================
 # Recording
 # =============================================================================
@@ -341,6 +347,7 @@ class AppConfig(BaseModel):
     encryption_enabled: bool
     safe_mode_enabled: bool
     safe_mode_level: SafeModeLevel
+    similarity_metric: SimilarityMetric
     auto_unload_seconds: int
 
 
@@ -355,6 +362,7 @@ class ConfigUpdateRequest(BaseModel):
     compression_quality: Optional[int] = Field(None, ge=50, le=90)
     safe_mode_enabled: Optional[bool] = None
     safe_mode_level: Optional[SafeModeLevel] = None
+    similarity_metric: Optional[SimilarityMetric] = None
     auto_unload_seconds: Optional[int] = Field(None, ge=0, le=3600)
 
 
