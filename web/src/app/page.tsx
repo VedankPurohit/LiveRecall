@@ -54,6 +54,7 @@ export default function Home() {
 
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   // Load preferences from localStorage
   useEffect(() => {
@@ -178,14 +179,16 @@ export default function Home() {
         return;
       }
       if (activeView === 'timeline' && !selectedImage && document.activeElement?.tagName !== 'INPUT') {
-        const shift = e.shiftKey;
         // Timeline: left = older (higher index), right = newer (lower index)
+        // Shift = 10 steps, Shift+Cmd = max(10, 2% of total)
+        const fastJump = Math.max(10, Math.floor(totalSnapshots * 0.02));
+        const step = (e.metaKey || e.ctrlKey) && e.shiftKey ? fastJump : e.shiftKey ? 10 : 1;
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          setCurrentIndex(i => Math.min(totalSnapshots - 1, i + (shift ? 10 : 1)));
+          setCurrentIndex(i => Math.min(totalSnapshots - 1, i + step));
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
-          setCurrentIndex(i => Math.max(0, i - (shift ? 10 : 1)));
+          setCurrentIndex(i => Math.max(0, i - step));
         } else if (e.key === 'Home') {
           e.preventDefault();
           setCurrentIndex(totalSnapshots - 1);
@@ -248,6 +251,56 @@ export default function Home() {
       setActiveView('search');
     }
   };
+
+  // Navigate to a specific screenshot in the timeline
+  const navigateToTimeline = useCallback(async (screenshot: Screenshot) => {
+    // First, try to find the screenshot in the current snapshots by ID
+    const existingIndex = snapshots.findIndex(s => s.id === screenshot.id);
+
+    if (existingIndex !== -1) {
+      // Found in current data - just navigate
+      setCurrentIndex(existingIndex);
+      setHighlightedId(screenshot.id);
+      setActiveView('timeline');
+      setSelectedImage(null);
+      // Clear highlight after 2 seconds
+      setTimeout(() => setHighlightedId(null), 2000);
+      return;
+    }
+
+    // Not in current data - we need to load screenshots around that timestamp
+    // The timeline is sorted newest first, so we need to find the offset
+    try {
+      // Fetch screenshots starting from around the target timestamp
+      // We'll get a batch that includes the target
+      const response = await getScreenshots(500, 0);
+      if (response?.screenshots) {
+        setSnapshots(response.screenshots);
+        setTotalSnapshots(response.total);
+
+        // Find the index again in the new data
+        const newIndex = response.screenshots.findIndex((s: Screenshot) => s.id === screenshot.id);
+        if (newIndex !== -1) {
+          setCurrentIndex(newIndex);
+          setHighlightedId(screenshot.id);
+          setActiveView('timeline');
+          setSelectedImage(null);
+          setTimeout(() => setHighlightedId(null), 2000);
+        } else {
+          // Still not found - maybe it's older than our limit
+          // Just switch to timeline at the start
+          setCurrentIndex(0);
+          setActiveView('timeline');
+          setSelectedImage(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load screenshots for timeline navigation:', err);
+      // Fallback - just switch to timeline
+      setActiveView('timeline');
+      setSelectedImage(null);
+    }
+  }, [snapshots]);
 
   const currentSnapshot = snapshots.length > 0 ? snapshots[currentIndex] : null;
   const maxCount = densityBuckets.length > 0
@@ -389,16 +442,27 @@ export default function Home() {
             <div className="flex-1 flex items-center justify-center px-4 pb-2 min-h-0">
               {currentSnapshot ? (
                 <div
-                  className="relative cursor-pointer"
+                  className={`relative cursor-pointer transition-all duration-300 ${
+                    highlightedId === currentSnapshot.id
+                      ? 'ring-2 ring-[#86efac] ring-offset-2 ring-offset-black rounded'
+                      : ''
+                  }`}
                   onClick={() => setSelectedImage(currentSnapshot)}
                 >
                   <img
                     ref={mainImageRef}
                     src={getImageUrl(currentSnapshot.image_path)}
                     alt=""
-                    className="max-w-full max-h-[calc(100vh-280px)] object-contain rounded border border-[#1e1e1e]"
+                    className={`max-w-full max-h-[calc(100vh-280px)] object-contain rounded border ${
+                      highlightedId === currentSnapshot.id ? 'border-[#86efac]' : 'border-[#1e1e1e]'
+                    } transition-colors`}
                     onError={(e) => console.error('Image failed to load:', currentSnapshot.image_path)}
                   />
+                  {highlightedId === currentSnapshot.id && (
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-[#86efac] text-black text-xs font-medium rounded">
+                      From Search
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center">
@@ -438,7 +502,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-                <span className="text-[10px] text-[#555]">Use arrow keys</span>
+                <span className="text-[10px] text-[#555]">Arrow keys • Shift = 10 • ⇧⌘ = 2%</span>
               </div>
 
               {/* Density Timeline */}
@@ -560,11 +624,6 @@ export default function Home() {
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
-                      {snapshot.similarity !== undefined && (
-                        <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-[#86efac]">
-                          {(snapshot.similarity * 100).toFixed(0)}%
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -616,7 +675,7 @@ export default function Home() {
 
           <div className="flex items-center gap-4 text-[#555]">
             <span>{totalSnapshots} snapshots</span>
-            <span>v2.0.0</span>
+            <span>v0.1.1</span>
           </div>
         </div>
       </footer>
@@ -641,11 +700,25 @@ export default function Home() {
             onClick={(e) => e.stopPropagation()}
             className="max-w-[90vw] max-h-[90vh] object-contain"
           />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-[#0f0f0f] rounded text-xs text-[#8a8a8a] border border-[#1e1e1e]">
-            {formatTimestamp(selectedImage.timestamp)}
-            {selectedImage.similarity !== undefined && (
-              <span className="ml-2 text-[#86efac]">{(selectedImage.similarity * 100).toFixed(0)}%</span>
-            )}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <div className="px-3 py-1.5 bg-[#0f0f0f] rounded text-xs text-[#8a8a8a] border border-[#1e1e1e]">
+              {formatTimestamp(selectedImage.timestamp)}
+              {selectedImage.similarity !== undefined && (
+                <span className="ml-2 text-[#86efac]">{(selectedImage.similarity * 100).toFixed(0)}%</span>
+              )}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigateToTimeline(selectedImage);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#86efac]/10 hover:bg-[#86efac]/20 text-[#86efac] rounded text-xs border border-[#86efac]/30 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              View in Timeline
+            </button>
           </div>
         </div>
       )}

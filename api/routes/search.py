@@ -66,6 +66,7 @@ async def search_screenshots(request: SearchRequest):
 
     # Search database - get more results than needed if filtering by date
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
+
     try:
         results = db.search_similar(
             embedding,
