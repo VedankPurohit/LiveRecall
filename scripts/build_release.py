@@ -4,8 +4,8 @@ LiveRecall Release Builder
 One-click script to build distributable packages from source.
 
 Usage:
-    python scripts/build_release.py           # Full build
-    python scripts/build_release.py --quick   # Skip web rebuild if exists
+    python scripts/build_release.py             # Full build (always rebuilds web UI)
+    python scripts/build_release.py --skip-web  # Skip web rebuild (use existing)
 
 This script will:
 1. Check prerequisites (Python, Node.js, uv)
@@ -27,7 +27,7 @@ from pathlib import Path
 # ============================================================================
 # Configuration
 # ============================================================================
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 APP_NAME = "LiveRecall"
 ROOT = Path(__file__).parent.parent.resolve()
 
@@ -163,19 +163,20 @@ def install_node_deps():
         print_success("Node.js dependencies already installed")
 
 
-def build_web(force: bool = False):
+def build_web(skip: bool = False):
     """Build Next.js static export"""
     print_step("Building web UI")
 
     web_dir = ROOT / "web"
     out_dir = web_dir / "out"
 
-    if out_dir.exists() and (out_dir / "index.html").exists() and not force:
-        print_success("Web UI already built (use --force to rebuild)")
+    if skip and out_dir.exists() and (out_dir / "index.html").exists():
+        print_warning("Skipping web rebuild (--skip-web). Using existing build.")
         return
 
-    # Clean previous build
+    # Always clean and rebuild to ensure we have the latest code
     if out_dir.exists():
+        print("  Cleaning previous web build...")
         shutil.rmtree(out_dir)
 
     run(["npm", "run", "build"], cwd=web_dir)
@@ -301,13 +302,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/build_release.py           # Full build
-  python scripts/build_release.py --quick   # Skip web rebuild
-  python scripts/build_release.py --force   # Force rebuild everything
+  python scripts/build_release.py             # Full build (always rebuilds web UI)
+  python scripts/build_release.py --skip-web  # Skip web rebuild (use existing)
         """
     )
-    parser.add_argument("--quick", action="store_true", help="Skip web rebuild if exists")
-    parser.add_argument("--force", action="store_true", help="Force rebuild everything")
+    parser.add_argument("--skip-web", action="store_true", help="Skip web rebuild (use existing build)")
     parser.add_argument("--skip-dmg", action="store_true", help="Skip DMG creation (macOS)")
     args = parser.parse_args()
 
@@ -329,7 +328,7 @@ Examples:
         install_node_deps()
 
         # Step 2: Build web UI
-        build_web(force=args.force or not args.quick)
+        build_web(skip=args.skip_web)
 
         # Step 3: Generate icons
         generate_icons(use_uv)
