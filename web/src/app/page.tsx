@@ -180,8 +180,8 @@ export default function Home() {
       }
       if (activeView === 'timeline' && !selectedImage && document.activeElement?.tagName !== 'INPUT') {
         // Timeline: left = older (higher index), right = newer (lower index)
-        // Shift = 10 steps, Shift+Cmd = max(10, 0.05% of total)
-        const fastJump = Math.max(10, Math.floor(totalSnapshots * 0.0005));
+        // Shift = 10 steps, Shift+Cmd = max(10, 2% of total)
+        const fastJump = Math.max(10, Math.floor(totalSnapshots * 0.02));
         const step = (e.metaKey || e.ctrlKey) && e.shiftKey ? fastJump : e.shiftKey ? 10 : 1;
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
@@ -502,7 +502,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-                <span className="text-[10px] text-[#555]">Arrow keys • Shift = 10 • ⇧⌘ = 0.05%</span>
+                <span className="text-[10px] text-[#555]">Arrow keys • Shift = 10 • ⇧⌘ = 2%</span>
               </div>
 
               {/* Density Timeline */}
