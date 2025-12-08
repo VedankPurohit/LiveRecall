@@ -502,7 +502,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-                <span className="text-[10px] text-[#555]">Arrow keys • Shift = 10 • ⇧⌘ = 2%</span>
+                <span className="text-[10px] text-[#555]">Arrow keys • Shift = 10 • ⇧⌘ = fast</span>
               </div>
 
               {/* Density Timeline */}
