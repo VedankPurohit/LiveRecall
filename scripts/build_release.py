@@ -27,7 +27,7 @@ from pathlib import Path
 # ============================================================================
 # Configuration
 # ============================================================================
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 APP_NAME = "LiveRecall"
 ROOT = Path(__file__).parent.parent.resolve()
 

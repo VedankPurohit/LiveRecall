@@ -84,7 +84,7 @@ app = FastAPI(
     The CLIP model is loaded lazily (on first sync/search) and
     automatically unloads after 5 minutes of inactivity to save memory.
     """,
-    version="0.1.1",
+    version="0.1.2",
     lifespan=lifespan,
 )
 
