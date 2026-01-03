@@ -12,7 +12,7 @@ IS_WINDOWS = sys.platform == 'win32'
 
 # App metadata
 APP_NAME = 'LiveRecall'
-APP_VERSION = '0.1.0'
+APP_VERSION = '0.1.2'
 APP_BUNDLE_ID = 'com.liverecall.app'
 
 # Paths

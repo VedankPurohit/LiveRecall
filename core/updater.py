@@ -8,7 +8,7 @@ from typing import Optional, Callable
 import httpx
 
 # Current version
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 GITHUB_REPO = "VedankPurohit/LiveRecall"
 RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
