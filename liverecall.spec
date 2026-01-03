@@ -185,6 +185,8 @@ if IS_MACOS:
             'LSUIElement': True,  # Hide from Dock (menu bar app)
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.15',
+            # macOS privacy permissions
+            'NSScreenCaptureUsageDescription': 'LiveRecall needs Screen Recording permission to capture screenshots of your screen for recall.',
         },
     )
 
