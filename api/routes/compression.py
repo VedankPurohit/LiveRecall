@@ -2,18 +2,18 @@
 Compression API Routes
 Manage old screenshot compression
 """
+
 from fastapi import APIRouter
 
 from api.schemas import (
-    CompressionStatus,
-    CompressionStats,
     CompressionStartRequest,
     CompressionStartResponse,
-    SuccessResponse,
+    CompressionStats,
+    CompressionStatus,
 )
-from core.database import db
-from core.compression import compression_service, CompressionProgress
+from core.compression import CompressionProgress, compression_service
 from core.config import config
+from core.database import db
 
 router = APIRouter(prefix="/compression", tags=["Compression"])
 

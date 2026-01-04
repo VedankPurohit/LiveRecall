@@ -31,11 +31,11 @@ def my_function():
 def complex_function(arg1: str, arg2: int) -> dict:
     """
     Longer description for complex functions.
-    
+
     Args:
         arg1: Description of arg1
         arg2: Description of arg2
-    
+
     Returns:
         Description of return value
     """
@@ -46,10 +46,10 @@ def complex_function(arg1: str, arg2: int) -> dict:
 ```python
 class MyService:
     """Service description"""
-    
+
     def __init__(self):
         self._private_var = None  # Private with underscore prefix
-        
+
     @property
     def public_prop(self) -> bool:
         """Property description"""
@@ -104,10 +104,10 @@ interface Props {
 export function MyComponent({ value }: Props) {
   // Hooks
   const [state, setState] = useState<string>('');
-  
+
   // Event handlers
   const handleClick = () => { ... };
-  
+
   // Render
   return <div>...</div>;
 }

@@ -3,25 +3,25 @@ LiveRecall Embeddings
 Lazy-loaded CLIP model for generating image and text embeddings
 With auto-unload capability for memory management
 """
+
 import os
-import time
 import threading
+import time
 import warnings
-from typing import Optional
 
 # Suppress HuggingFace warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", message=".*use_fast.*")
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-import torch
-from PIL import Image
+import torch  # noqa: E402
+from PIL import Image  # noqa: E402
 
 # Lazy loading state
 _model = None
 _device = None
 _last_used: float = 0
-_auto_unload_timer: Optional[threading.Timer] = None
+_auto_unload_timer: threading.Timer | None = None
 _lock = threading.Lock()
 
 # Configuration
@@ -153,6 +153,7 @@ def set_auto_unload_timeout(seconds: int):
 def _normalize(embedding) -> list[float]:
     """Normalize embedding to unit length for cosine similarity"""
     import numpy as np
+
     arr = np.array(embedding)
     norm = np.linalg.norm(arr)
     if norm > 0:
@@ -193,8 +194,8 @@ def get_text_embedding(text: str) -> list[float]:
 
 def get_combined_embedding(
     base_text: str,
-    positive_texts: Optional[list[str]] = None,
-    negative_texts: Optional[list[str]] = None,
+    positive_texts: list[str] | None = None,
+    negative_texts: list[str] | None = None,
     positive_weight: float = 1.0,
     negative_weight: float = 1.0,
 ) -> list[float]:
@@ -238,10 +239,7 @@ def cosine_similarity(emb1: list[float], emb2: list[float]) -> float:
 
 
 # Safe mode negative texts for content filtering
-SAFE_MODE_TEXTS = [
-    "nsfw", "nude", "naked", "porn", "sex", "explicit",
-    "violence", "gore", "blood", "death"
-]
+SAFE_MODE_TEXTS = ["nsfw", "nude", "naked", "porn", "sex", "explicit", "violence", "gore", "blood", "death"]
 
 SAFE_MODE_WEIGHTS = {
     "low": 0.6,
@@ -254,10 +252,7 @@ SAFE_MODE_WEIGHTS = {
 }
 
 
-def get_safe_search_embedding(
-    text: str,
-    safe_mode_level: str = "mid"
-) -> list[float]:
+def get_safe_search_embedding(text: str, safe_mode_level: str = "mid") -> list[float]:
     """Generate embedding with safe mode filtering"""
     weight = SAFE_MODE_WEIGHTS.get(safe_mode_level.lower(), 1.2)
 

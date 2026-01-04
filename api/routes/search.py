@@ -2,6 +2,7 @@
 Search API Routes
 Semantic search for screenshots
 """
+
 from fastapi import APIRouter, HTTPException
 
 from api.schemas import (
@@ -9,12 +10,12 @@ from api.schemas import (
     SearchResponse,
     SearchResult,
 )
-from core.database import db
 from core.config import config
+from core.database import db
 from core.embeddings import (
-    get_text_embedding,
     get_combined_embedding,
     get_safe_search_embedding,
+    get_text_embedding,
 )
 
 router = APIRouter(prefix="/search", tags=["Search"])
@@ -62,22 +63,18 @@ async def search_screenshots(request: SearchRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Error generating embedding: {str(e)}",
-        )
+        ) from e
 
     # Search database - get more results than needed if filtering by date
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
 
     try:
-        results = db.search_similar(
-            embedding,
-            limit=search_limit,
-            similarity_metric=config.similarity_metric
-        )
+        results = db.search_similar(embedding, limit=search_limit, similarity_metric=config.similarity_metric)
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Search error: {str(e)}",
-        )
+        ) from e
 
     # Filter by date range if specified
     if request.start_date or request.end_date:
@@ -102,7 +99,7 @@ async def search_screenshots(request: SearchRequest):
             similarity=r["similarity"],
             image_url=f"/api/v1/screenshots/{r['id']}/image",
         )
-        for r in results[:request.limit]
+        for r in results[: request.limit]
     ]
 
     return SearchResponse(

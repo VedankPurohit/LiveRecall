@@ -2,23 +2,23 @@
 Screenshots API Routes
 CRUD operations for screenshots
 """
+
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from api.schemas import (
-    Screenshot,
-    ScreenshotList,
-    ScreenshotDeleteResponse,
-    SuccessResponse,
     DateRange,
     DensityBucket,
     DensityResponse,
+    Screenshot,
+    ScreenshotDeleteResponse,
+    ScreenshotList,
+    SuccessResponse,
 )
-from core.database import db
 from core.config import get_screenshots_dir
+from core.database import db
 
 router = APIRouter(prefix="/screenshots", tags=["Screenshots"])
 
@@ -40,8 +40,8 @@ async def list_screenshots(
     offset: int = Query(default=0, ge=0),
     synced_only: bool = Query(default=False),
     unsynced_only: bool = Query(default=False),
-    start_date: Optional[str] = Query(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)"),
-    end_date: Optional[str] = Query(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)"),
+    start_date: str | None = Query(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)"),
+    end_date: str | None = Query(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)"),
 ):
     """
     List screenshots with pagination and optional date filtering.
@@ -103,8 +103,8 @@ async def get_image_by_path(
     screenshots_dir = get_screenshots_dir()
     try:
         image_path.relative_to(screenshots_dir)
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail="Access denied") from e
 
     return FileResponse(
         path=str(image_path),
@@ -151,10 +151,7 @@ async def get_density(
     total = sum(b["count"] for b in density_data)
 
     return DensityResponse(
-        buckets=[
-            DensityBucket(start=b["start"], end=b["end"], count=b["count"])
-            for b in density_data
-        ],
+        buckets=[DensityBucket(start=b["start"], end=b["end"], count=b["count"]) for b in density_data],
         total=total,
         min_date=density_data[0]["start"] if density_data else None,
         max_date=density_data[-1]["end"] if density_data else None,
@@ -175,7 +172,7 @@ async def get_screenshot(screenshot_id: int):
 @router.get("/{screenshot_id}/image")
 async def get_screenshot_image(
     screenshot_id: int,
-    decrypt_key: Optional[str] = Query(default=None),
+    decrypt_key: str | None = Query(default=None),
 ):
     """
     Get the actual screenshot image file.

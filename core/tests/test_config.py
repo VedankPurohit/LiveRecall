@@ -1,7 +1,7 @@
 """
 Tests for core/config.py
 """
-import pytest
+
 from pathlib import Path
 
 
@@ -37,7 +37,7 @@ class TestPaths:
 
     def test_get_database_path(self):
         """Database path should be in data directory"""
-        from core.config import get_database_path, get_data_dir
+        from core.config import get_data_dir, get_database_path
 
         db_path = get_database_path()
         assert isinstance(db_path, Path)
@@ -86,10 +86,7 @@ class TestCaptureSettings:
         """All documented modes should exist"""
         from core.config import CaptureSettings
 
-        expected_modes = [
-            "normal", "games", "fast", "presentation",
-            "video", "coding", "security", "timelapse"
-        ]
+        expected_modes = ["normal", "games", "fast", "presentation", "video", "coding", "security", "timelapse"]
 
         for mode in expected_modes:
             assert mode in CaptureSettings.MODES

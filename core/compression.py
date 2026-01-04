@@ -2,22 +2,22 @@
 LiveRecall Compression Service
 Auto-compress old screenshots to save storage
 """
-import os
+
 import threading
-import time
-from pathlib import Path
-from typing import Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from PIL import Image
 
-from core.database import db
 from core.config import config
+from core.database import db
 
 
 @dataclass
 class CompressionProgress:
     """Progress information for compression operation"""
+
     total: int = 0
     processed: int = 0
     errors: int = 0
@@ -36,9 +36,9 @@ class CompressionService:
 
     def __init__(self):
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._progress = CompressionProgress()
-        self._on_progress: Optional[Callable[[CompressionProgress], None]] = None
+        self._on_progress: Callable[[CompressionProgress], None] | None = None
         self._cancel_requested = False
 
     @property
@@ -51,10 +51,10 @@ class CompressionService:
 
     def start(
         self,
-        older_than_days: Optional[int] = None,
-        quality: Optional[int] = None,
+        older_than_days: int | None = None,
+        quality: int | None = None,
         batch_size: int = 20,
-        on_progress: Optional[Callable[[CompressionProgress], None]] = None
+        on_progress: Callable[[CompressionProgress], None] | None = None,
     ):
         """Start compressing old screenshots in background"""
         if self._running:
@@ -70,9 +70,7 @@ class CompressionService:
         self._cancel_requested = False
         self._on_progress = on_progress
         self._thread = threading.Thread(
-            target=self._compress_loop,
-            args=(older_than_days, quality, batch_size),
-            daemon=True
+            target=self._compress_loop, args=(older_than_days, quality, batch_size), daemon=True
         )
         self._thread.start()
 
@@ -95,11 +93,7 @@ class CompressionService:
             return
 
         self._progress = CompressionProgress(
-            total=total_compressible,
-            processed=0,
-            errors=0,
-            bytes_saved=0,
-            is_running=True
+            total=total_compressible, processed=0, errors=0, bytes_saved=0, is_running=True
         )
 
         print(f"🗜️ Compressing {total_compressible} old screenshots...")
@@ -132,7 +126,9 @@ class CompressionService:
         # Mark as complete
         self._running = False
         self._progress.is_running = False
-        print(f"✅ Compression complete: {self._progress.processed} processed, {self._progress.bytes_saved // 1024}KB saved")
+        print(
+            f"✅ Compression complete: {self._progress.processed} processed, {self._progress.bytes_saved // 1024}KB saved"
+        )
 
     def _compress_screenshot(self, screenshot: dict, quality: int) -> int:
         """
@@ -170,8 +166,8 @@ class CompressionService:
 
     def compress_now(
         self,
-        older_than_days: Optional[int] = None,
-        quality: Optional[int] = None,
+        older_than_days: int | None = None,
+        quality: int | None = None,
     ) -> CompressionProgress:
         """
         Synchronously compress all eligible screenshots (blocking).
@@ -185,11 +181,7 @@ class CompressionService:
         screenshots = db.get_compressible_screenshots(older_than_days)
 
         self._progress = CompressionProgress(
-            total=len(screenshots),
-            processed=0,
-            errors=0,
-            bytes_saved=0,
-            is_running=True
+            total=len(screenshots), processed=0, errors=0, bytes_saved=0, is_running=True
         )
 
         for screenshot in screenshots:
@@ -214,7 +206,7 @@ if __name__ == "__main__":
 
     db.connect()
 
-    print(f"Compression settings:")
+    print("Compression settings:")
     print(f"  Enabled: {config.compression.enabled}")
     print(f"  After days: {config.compression.after_days}")
     print(f"  Quality: {config.compression.quality}")
@@ -225,7 +217,7 @@ if __name__ == "__main__":
     if compressible > 0:
         print("\nStarting compression...")
         result = compression_service.compress_now()
-        print(f"\nDone!")
+        print("\nDone!")
         print(f"  Processed: {result.processed}")
         print(f"  Errors: {result.errors}")
         print(f"  Bytes saved: {result.bytes_saved:,}")

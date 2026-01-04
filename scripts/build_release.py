@@ -16,8 +16,8 @@ This script will:
 6. Run PyInstaller to create app bundle
 7. Create platform-specific installer (DMG on macOS, EXE on Windows)
 """
+
 import argparse
-import os
 import platform
 import shutil
 import subprocess
@@ -35,15 +35,16 @@ ROOT = Path(__file__).parent.parent.resolve()
 REQUIRED_PYTHON_VERSION = (3, 10)
 REQUIRED_NODE_VERSION = 18
 
+
 # Colors for terminal output
 class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    END = '\033[0m'
-    BOLD = '\033[1m'
+    HEADER = "\033[95m"
+    BLUE = "\033[94m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    END = "\033[0m"
+    BOLD = "\033[1m"
 
 
 def print_step(msg: str):
@@ -65,13 +66,7 @@ def print_error(msg: str):
 def run(cmd: list[str], cwd: Path = ROOT, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
     """Run a command"""
     print(f"  $ {' '.join(cmd)}")
-    return subprocess.run(
-        cmd,
-        cwd=cwd,
-        check=check,
-        capture_output=capture,
-        text=True
-    )
+    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=capture, text=True)
 
 
 # ============================================================================
@@ -81,10 +76,14 @@ def check_python() -> bool:
     """Check Python version"""
     version = sys.version_info[:2]
     if version >= REQUIRED_PYTHON_VERSION:
-        print_success(f"Python {version[0]}.{version[1]} (>= {REQUIRED_PYTHON_VERSION[0]}.{REQUIRED_PYTHON_VERSION[1]})")
+        print_success(
+            f"Python {version[0]}.{version[1]} (>= {REQUIRED_PYTHON_VERSION[0]}.{REQUIRED_PYTHON_VERSION[1]})"
+        )
         return True
     else:
-        print_error(f"Python {version[0]}.{version[1]} (need >= {REQUIRED_PYTHON_VERSION[0]}.{REQUIRED_PYTHON_VERSION[1]})")
+        print_error(
+            f"Python {version[0]}.{version[1]} (need >= {REQUIRED_PYTHON_VERSION[0]}.{REQUIRED_PYTHON_VERSION[1]})"
+        )
         return False
 
 
@@ -95,7 +94,7 @@ def check_node() -> bool:
         if result.returncode == 0:
             version = result.stdout.strip()
             # Extract major version number
-            major = int(version.lstrip('v').split('.')[0])
+            major = int(version.lstrip("v").split(".")[0])
             if major >= REQUIRED_NODE_VERSION:
                 print_success(f"Node.js {version} (>= {REQUIRED_NODE_VERSION})")
                 return True
@@ -127,12 +126,9 @@ def check_prerequisites() -> bool:
 
     python_ok = check_python()
     node_ok = check_node()
-    uv_ok = check_uv()
+    check_uv()  # Check for uv, result used later via shutil.which
 
-    if not python_ok or not node_ok:
-        return False
-
-    return True
+    return python_ok and node_ok
 
 
 # ============================================================================
@@ -277,14 +273,20 @@ def create_dmg(app_path: Path) -> Path:
     if dmg_path.exists():
         dmg_path.unlink()
 
-    run([
-        "hdiutil", "create",
-        "-volname", APP_NAME,
-        "-srcfolder", str(staging_dir),
-        "-ov",
-        "-format", "UDZO",
-        str(dmg_path)
-    ])
+    run(
+        [
+            "hdiutil",
+            "create",
+            "-volname",
+            APP_NAME,
+            "-srcfolder",
+            str(staging_dir),
+            "-ov",
+            "-format",
+            "UDZO",
+            str(dmg_path),
+        ]
+    )
 
     # Cleanup staging
     shutil.rmtree(staging_dir)
@@ -304,7 +306,7 @@ def main():
 Examples:
   python scripts/build_release.py             # Full build (always rebuilds web UI)
   python scripts/build_release.py --skip-web  # Skip web rebuild (use existing)
-        """
+        """,
     )
     parser.add_argument("--skip-web", action="store_true", help="Skip web rebuild (use existing build)")
     parser.add_argument("--skip-dmg", action="store_true", help="Skip DMG creation (macOS)")
@@ -342,10 +344,10 @@ Examples:
             dmg = create_dmg(artifact)
 
             print(f"\n{Colors.GREEN}{Colors.BOLD}Build complete!{Colors.END}")
-            print(f"\nOutput files:")
+            print("\nOutput files:")
             print(f"  App:  {artifact}")
             print(f"  DMG:  {dmg}")
-            print(f"\nTo install: Open the DMG and drag LiveRecall to Applications")
+            print("\nTo install: Open the DMG and drag LiveRecall to Applications")
 
         elif system == "Windows":
             print(f"\n{Colors.GREEN}{Colors.BOLD}Build complete!{Colors.END}")

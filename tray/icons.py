@@ -1,9 +1,10 @@
 """
 Programmatic icon generation using PIL
 """
+
 import math
+
 from PIL import Image, ImageDraw
-from typing import Tuple
 
 from .config import get_icon_size
 
@@ -11,7 +12,7 @@ from .config import get_icon_size
 COLOR_WHITE = (255, 255, 255)
 
 
-def create_app_icon(size: Tuple[int, int] = None) -> Image.Image:
+def create_app_icon(size: tuple[int, int] = None) -> Image.Image:
     """
     Create the LiveRecall app icon - circular arrow (rewind/recall symbol)
     High resolution white monochrome design for menu bar
@@ -23,7 +24,7 @@ def create_app_icon(size: Tuple[int, int] = None) -> Image.Image:
     scale = 2
     canvas_size = (size[0] * scale, size[1] * scale)
 
-    img = Image.new('RGBA', canvas_size, (0, 0, 0, 0))
+    img = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     w, h = canvas_size
@@ -66,10 +67,7 @@ def create_app_icon(size: Tuple[int, int] = None) -> Image.Image:
     base2_y = arrow_y + arrow_size * 0.5 * math.sin(tangent_angle + math.pi + spread_angle)
 
     # Draw filled triangle arrowhead
-    draw.polygon(
-        [(tip_x, tip_y), (base1_x, base1_y), (base2_x, base2_y)],
-        fill=COLOR_WHITE + (255,)
-    )
+    draw.polygon([(tip_x, tip_y), (base1_x, base1_y), (base2_x, base2_y)], fill=COLOR_WHITE + (255,))
 
     # Scale down to target size with antialiasing
     img = img.resize(size, Image.Resampling.LANCZOS)

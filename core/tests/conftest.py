@@ -1,19 +1,8 @@
 """
-Pytest configuration and fixtures for LiveRecall tests
+Core module test fixtures
 """
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
-
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
 
 
 @pytest.fixture
@@ -42,7 +31,7 @@ def sample_screenshot(temp_dir):
 @pytest.fixture
 def mock_config():
     """Mock configuration for testing"""
-    from core.config import Config, CaptureSettings, CompressionSettings
+    from core.config import CaptureSettings, CompressionSettings, Config
 
     return Config(
         capture=CaptureSettings(
@@ -58,10 +47,3 @@ def mock_config():
             quality=85,
         ),
     )
-
-
-@pytest.fixture
-def mock_embedding():
-    """Generate a fake 768-dimensional embedding"""
-    import random
-    return [random.random() for _ in range(768)]

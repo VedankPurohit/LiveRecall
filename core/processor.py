@@ -2,18 +2,19 @@
 LiveRecall Processor
 Sync service for generating embeddings for unsynced screenshots
 """
+
 import threading
-import time
-from typing import Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from core.database import db
-from core.embeddings import get_image_embedding, is_loaded
+from core.embeddings import get_image_embedding
 
 
 @dataclass
 class SyncProgress:
     """Progress information for sync operation"""
+
     total: int = 0
     processed: int = 0
     errors: int = 0
@@ -35,9 +36,9 @@ class ProcessorService:
 
     def __init__(self):
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._progress = SyncProgress()
-        self._on_progress: Optional[Callable[[SyncProgress], None]] = None
+        self._on_progress: Callable[[SyncProgress], None] | None = None
         self._cancel_requested = False
 
     @property
@@ -48,11 +49,7 @@ class ProcessorService:
     def progress(self) -> SyncProgress:
         return self._progress
 
-    def start(
-        self,
-        batch_size: int = 10,
-        on_progress: Optional[Callable[[SyncProgress], None]] = None
-    ):
+    def start(self, batch_size: int = 10, on_progress: Callable[[SyncProgress], None] | None = None):
         """Start processing unsynced screenshots in background"""
         if self._running:
             return
@@ -60,11 +57,7 @@ class ProcessorService:
         self._running = True
         self._cancel_requested = False
         self._on_progress = on_progress
-        self._thread = threading.Thread(
-            target=self._process_loop,
-            args=(batch_size,),
-            daemon=True
-        )
+        self._thread = threading.Thread(target=self._process_loop, args=(batch_size,), daemon=True)
         self._thread.start()
 
     def stop(self):
@@ -75,19 +68,14 @@ class ProcessorService:
             self._thread.join(timeout=10)
             self._thread = None
 
-    def sync_all(self, on_progress: Optional[Callable[[SyncProgress], None]] = None):
+    def sync_all(self, on_progress: Callable[[SyncProgress], None] | None = None):
         """Synchronously process all unsynced screenshots (blocking)"""
         self._on_progress = on_progress
         self._cancel_requested = False
 
         # Get unsynced count
         unsynced = db.get_unsynced_screenshots()
-        self._progress = SyncProgress(
-            total=len(unsynced),
-            processed=0,
-            errors=0,
-            is_running=True
-        )
+        self._progress = SyncProgress(total=len(unsynced), processed=0, errors=0, is_running=True)
 
         if self._on_progress:
             self._on_progress(self._progress)
@@ -127,12 +115,7 @@ class ProcessorService:
             self._progress = SyncProgress(total=0, processed=0, errors=0, is_running=False)
             return
 
-        self._progress = SyncProgress(
-            total=total_unsynced,
-            processed=0,
-            errors=0,
-            is_running=True
-        )
+        self._progress = SyncProgress(total=total_unsynced, processed=0, errors=0, is_running=True)
 
         print(f"🔄 Syncing {total_unsynced} screenshots...")
 
@@ -175,9 +158,7 @@ class ProcessorService:
 processor_service = ProcessorService()
 
 
-def sync_screenshots(
-    on_progress: Optional[Callable[[SyncProgress], None]] = None
-) -> SyncProgress:
+def sync_screenshots(on_progress: Callable[[SyncProgress], None] | None = None) -> SyncProgress:
     """
     Convenience function to sync all unsynced screenshots
     This is a blocking call - use processor_service.start() for background processing
@@ -198,7 +179,7 @@ if __name__ == "__main__":
     print("Starting sync...")
     result = sync_screenshots(on_progress=print_progress)
 
-    print(f"\nSync complete!")
+    print("\nSync complete!")
     print(f"  Processed: {result.processed}")
     print(f"  Errors: {result.errors}")
     print(f"  Stats: {db.get_stats()}")

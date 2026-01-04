@@ -2,8 +2,9 @@
 LiveRecall Auto-Update Checker
 Checks GitHub releases for new versions
 """
+
 import threading
-from typing import Optional, Callable
+from collections.abc import Callable
 
 import httpx
 
@@ -16,9 +17,9 @@ RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 def parse_version(version_str: str) -> tuple[int, ...]:
     """Parse version string like '0.1.0' into tuple (0, 1, 0)"""
     # Strip 'v' prefix if present
-    version_str = version_str.lstrip('v')
+    version_str = version_str.lstrip("v")
     try:
-        return tuple(int(x) for x in version_str.split('.'))
+        return tuple(int(x) for x in version_str.split("."))
     except ValueError:
         return (0, 0, 0)
 
@@ -28,7 +29,7 @@ def is_newer_version(latest: str, current: str = VERSION) -> bool:
     return parse_version(latest) > parse_version(current)
 
 
-def check_for_updates() -> Optional[dict]:
+def check_for_updates() -> dict | None:
     """
     Check GitHub for new releases.
 
@@ -47,7 +48,7 @@ def check_for_updates() -> Optional[dict]:
                 return None
 
             data = response.json()
-            latest_version = data.get("tag_name", "").lstrip('v')
+            latest_version = data.get("tag_name", "").lstrip("v")
 
             if not latest_version:
                 return None
@@ -69,11 +70,12 @@ def check_for_updates() -> Optional[dict]:
         return None
 
 
-def check_for_updates_async(callback: Callable[[Optional[dict]], None]):
+def check_for_updates_async(callback: Callable[[dict | None], None]):
     """
     Check for updates in background thread.
     Calls callback with result (update info dict or None).
     """
+
     def _check():
         result = check_for_updates()
         callback(result)

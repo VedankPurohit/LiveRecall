@@ -1,11 +1,12 @@
 """
 Tests for core/compression.py
 """
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from pathlib import Path
 
-from core.compression import CompressionService, CompressionProgress
+from unittest.mock import patch
+
+import pytest
+
+from core.compression import CompressionProgress, CompressionService
 
 
 class TestCompressionProgress:
@@ -94,9 +95,6 @@ class TestCompressionService:
             "image_path": str(sample_screenshot),
             "is_compressed": 0,
         }
-
-        # Get original size
-        original_size = sample_screenshot.stat().st_size
 
         saved = service._compress_screenshot(screenshot, quality=50)
 

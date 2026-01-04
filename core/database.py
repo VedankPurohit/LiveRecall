@@ -2,12 +2,12 @@
 LiveRecall Database
 SQLite + sqlite-vec for vector similarity search
 """
+
 import sqlite3
 import struct
 import time
-from pathlib import Path
-from typing import Optional
 from contextlib import contextmanager
+from pathlib import Path
 
 import sqlite_vec
 
@@ -30,9 +30,9 @@ def deserialize_embedding(blob: bytes) -> list[float]:
 class Database:
     """SQLite database with vector search support"""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or get_database_path()
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
 
     def connect(self):
         """Connect to database and initialize sqlite-vec"""
@@ -56,6 +56,7 @@ class Database:
     @contextmanager
     def cursor(self):
         """Context manager for cursor"""
+        assert self.conn is not None, "Database not connected"
         cur = self.conn.cursor()
         try:
             yield cur
@@ -125,7 +126,7 @@ class Database:
 
     # --- Screenshot CRUD ---
 
-    def add_screenshot(self, image_path: str, timestamp: Optional[str] = None) -> int:
+    def add_screenshot(self, image_path: str, timestamp: str | None = None) -> int:
         """Add a new screenshot (without embedding)"""
         if timestamp is None:
             timestamp = time.strftime("%y%m%d%H%M%S")
@@ -133,18 +134,18 @@ class Database:
         with self.cursor() as cur:
             cur.execute(
                 "INSERT INTO screenshots (image_path, timestamp, has_embedding) VALUES (?, ?, 0)",
-                (image_path, timestamp)
+                (image_path, timestamp),
             )
             return cur.lastrowid
 
-    def get_screenshot(self, screenshot_id: int) -> Optional[dict]:
+    def get_screenshot(self, screenshot_id: int) -> dict | None:
         """Get a screenshot by ID"""
         with self.cursor() as cur:
             cur.execute("SELECT * FROM screenshots WHERE id = ?", (screenshot_id,))
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def get_screenshot_by_path(self, image_path: str) -> Optional[dict]:
+    def get_screenshot_by_path(self, image_path: str) -> dict | None:
         """Get a screenshot by path"""
         with self.cursor() as cur:
             cur.execute("SELECT * FROM screenshots WHERE image_path = ?", (image_path,))
@@ -155,20 +156,13 @@ class Database:
         """Delete a screenshot and its embedding"""
         with self.cursor() as cur:
             # Delete embedding first
-            cur.execute(
-                "DELETE FROM screenshot_embeddings WHERE screenshot_id = ?",
-                (screenshot_id,)
-            )
+            cur.execute("DELETE FROM screenshot_embeddings WHERE screenshot_id = ?", (screenshot_id,))
             # Delete screenshot
             cur.execute("DELETE FROM screenshots WHERE id = ?", (screenshot_id,))
             return cur.rowcount > 0
 
     def get_all_screenshots(
-        self,
-        limit: Optional[int] = None,
-        offset: int = 0,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        self, limit: int | None = None, offset: int = 0, start_date: str | None = None, end_date: str | None = None
     ) -> list[dict]:
         """Get all screenshots with pagination and optional date filtering.
 
@@ -179,8 +173,8 @@ class Database:
             end_date: Filter screenshots before this timestamp (YYMMDDHHMMSS format)
         """
         with self.cursor() as cur:
-            conditions = []
-            params = []
+            conditions: list[str] = []
+            params: list[str | int] = []
 
             if start_date:
                 conditions.append("timestamp >= ?")
@@ -200,11 +194,7 @@ class Database:
             cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
-    def get_screenshots_count(
-        self,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> int:
+    def get_screenshots_count(self, start_date: str | None = None, end_date: str | None = None) -> int:
         """Get count of screenshots with optional date filtering."""
         with self.cursor() as cur:
             conditions = []
@@ -226,10 +216,7 @@ class Database:
         with self.cursor() as cur:
             cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM screenshots")
             row = cur.fetchone()
-            return {
-                "min_date": row[0],
-                "max_date": row[1]
-            }
+            return {"min_date": row[0], "max_date": row[1]}
 
     def get_density_data(self, buckets: int = 100) -> list[dict]:
         """Get screenshot count per time bucket for timeline density visualization.
@@ -281,33 +268,23 @@ class Database:
                 end_ts = format_ts(bucket_end_dt)
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM screenshots WHERE timestamp >= ? AND timestamp < ?",
-                    (start_ts, end_ts)
+                    "SELECT COUNT(*) FROM screenshots WHERE timestamp >= ? AND timestamp < ?", (start_ts, end_ts)
                 )
                 count = cur.fetchone()[0]
 
-                result.append({
-                    "start": start_ts,
-                    "end": end_ts,
-                    "count": count
-                })
+                result.append({"start": start_ts, "end": end_ts, "count": count})
 
             return result
 
     # --- Embedding operations ---
 
-    def get_unsynced_screenshots(self, limit: Optional[int] = None) -> list[dict]:
+    def get_unsynced_screenshots(self, limit: int | None = None) -> list[dict]:
         """Get screenshots that don't have embeddings yet"""
         with self.cursor() as cur:
             if limit:
-                cur.execute(
-                    "SELECT * FROM screenshots WHERE has_embedding = 0 ORDER BY id ASC LIMIT ?",
-                    (limit,)
-                )
+                cur.execute("SELECT * FROM screenshots WHERE has_embedding = 0 ORDER BY id ASC LIMIT ?", (limit,))
             else:
-                cur.execute(
-                    "SELECT * FROM screenshots WHERE has_embedding = 0 ORDER BY id ASC"
-                )
+                cur.execute("SELECT * FROM screenshots WHERE has_embedding = 0 ORDER BY id ASC")
             return [dict(row) for row in cur.fetchall()]
 
     def get_unsynced_count(self) -> int:
@@ -327,13 +304,10 @@ class Database:
             # Insert into vector table
             cur.execute(
                 "INSERT INTO screenshot_embeddings (screenshot_id, embedding) VALUES (?, ?)",
-                (screenshot_id, embedding_bytes)
+                (screenshot_id, embedding_bytes),
             )
             # Mark screenshot as having embedding
-            cur.execute(
-                "UPDATE screenshots SET has_embedding = 1 WHERE id = ?",
-                (screenshot_id,)
-            )
+            cur.execute("UPDATE screenshots SET has_embedding = 1 WHERE id = ?", (screenshot_id,))
             return True
 
     def search_similar(
@@ -341,7 +315,7 @@ class Database:
         query_embedding: list[float],
         limit: int = 10,
         min_similarity: float = 0.0,
-        similarity_metric: str = "cosine"
+        similarity_metric: str = "cosine",
     ) -> list[dict]:
         """Search for similar screenshots using vector similarity
 
@@ -358,7 +332,8 @@ class Database:
 
         with self.cursor() as cur:
             # sqlite-vec uses L2 distance, lower is more similar
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     s.*,
                     e.distance as vec_distance
@@ -367,7 +342,9 @@ class Database:
                 WHERE e.embedding MATCH ?
                     AND k = ?
                 ORDER BY e.distance ASC
-            """, (query_bytes, limit))
+            """,
+                (query_bytes, limit),
+            )
 
             results = []
             for row in cur.fetchall():
@@ -378,7 +355,7 @@ class Database:
                     # Convert L2 distance to cosine similarity
                     # For normalized vectors: L2² = 2(1 - cosine_sim)
                     # So: cosine_sim = 1 - L2²/2
-                    similarity = max(0.0, min(1.0, 1.0 - (distance ** 2) / 2))
+                    similarity = max(0.0, min(1.0, 1.0 - (distance**2) / 2))
                 else:
                     # Use inverse distance: 1 / (1 + distance)
                     similarity = 1.0 / (1.0 + distance)
@@ -391,7 +368,7 @@ class Database:
 
     # --- Compression operations ---
 
-    def get_compressible_screenshots(self, older_than_days: int, limit: Optional[int] = None) -> list[dict]:
+    def get_compressible_screenshots(self, older_than_days: int, limit: int | None = None) -> list[dict]:
         """Get screenshots eligible for compression (old + not compressed)"""
         with self.cursor() as cur:
             query = """
@@ -413,11 +390,14 @@ class Database:
     def get_compressible_count(self, older_than_days: int) -> int:
         """Get count of screenshots eligible for compression"""
         with self.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT COUNT(*) FROM screenshots
                 WHERE is_compressed = 0
                 AND created_at < datetime('now', ?)
-            """, (f"-{older_than_days} days",))
+            """,
+                (f"-{older_than_days} days",),
+            )
             return cur.fetchone()[0]
 
     def mark_compressed(
@@ -427,13 +407,16 @@ class Database:
     ) -> bool:
         """Mark a screenshot as compressed"""
         with self.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE screenshots
                 SET is_compressed = 1,
                     original_size_bytes = ?,
                     compressed_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (original_size, screenshot_id))
+            """,
+                (original_size, screenshot_id),
+            )
             return cur.rowcount > 0
 
     def get_compression_stats(self) -> dict:

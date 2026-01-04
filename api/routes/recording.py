@@ -2,14 +2,15 @@
 Recording API Routes
 Control screen capture recording
 """
+
 from fastapi import APIRouter, HTTPException
 
 from api.schemas import (
-    RecordingStatus,
+    CaptureMode,
     RecordingStartRequest,
     RecordingStartResponse,
+    RecordingStatus,
     SuccessResponse,
-    CaptureMode,
 )
 from core.capture import capture_service
 from core.config import config
@@ -122,4 +123,4 @@ async def capture_now():
             message=f"Screenshot captured: {filepath}",
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

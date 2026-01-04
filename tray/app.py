@@ -1,31 +1,32 @@
 """
 Main system tray application
 """
+
 import threading
 import time
 import webbrowser
-from typing import Optional
 
 import pystray
 
-from .config import STATUS_POLL_INTERVAL
-from .api_client import api_client, SystemStatus
+from core.updater import VERSION, check_for_updates_async
+
+from .api_client import SystemStatus, api_client
 from .backend import backend_manager
+from .config import STATUS_POLL_INTERVAL
 from .icons import get_app_icon
 from .menu import MenuBuilder
-from core.updater import check_for_updates_async, VERSION
 
 
 class TrayApp:
     """Main system tray application"""
 
     def __init__(self):
-        self._icon: Optional[pystray.Icon] = None
-        self._menu_builder: Optional[MenuBuilder] = None
+        self._icon: pystray.Icon | None = None
+        self._menu_builder: MenuBuilder | None = None
         self._status = SystemStatus()
         self._running = False
-        self._poll_thread: Optional[threading.Thread] = None
-        self._update_info: Optional[dict] = None
+        self._poll_thread: threading.Thread | None = None
+        self._update_info: dict | None = None
 
     def _on_toggle_recording(self):
         """Handle recording toggle"""
@@ -48,7 +49,7 @@ class TrayApp:
         self._running = False
         self.stop()
 
-    def _on_update_available(self, update_info: Optional[dict]):
+    def _on_update_available(self, update_info: dict | None):
         """Callback when update check completes"""
         if update_info:
             self._update_info = update_info

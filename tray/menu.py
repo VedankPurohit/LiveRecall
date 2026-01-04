@@ -1,15 +1,19 @@
 """
 Menu construction for system tray
 """
-import webbrowser
+
+from __future__ import annotations
+
 import subprocess
-from typing import Callable
+import webbrowser
+from collections.abc import Callable
+from typing import Any
 
-import pystray
-from pystray import MenuItem as Item, Menu
+from pystray import Menu
+from pystray import MenuItem as Item
 
-from .config import CAPTURE_MODES, WEB_UI_URL, PLATFORM
 from .api_client import SystemStatus
+from .config import CAPTURE_MODES, PLATFORM, WEB_UI_URL
 
 
 def open_data_folder():
@@ -55,9 +59,9 @@ class MenuBuilder:
 
         # Current state
         self._status = SystemStatus()
-        self._update_info = None
+        self._update_info: dict[str, Any] | None = None
 
-    def update_status(self, status: SystemStatus, update_info: dict = None):
+    def update_status(self, status: SystemStatus, update_info: dict[str, Any] | None = None):
         """Update internal status"""
         self._status = status
         if update_info is not None:
@@ -65,14 +69,18 @@ class MenuBuilder:
 
     def _make_mode_handler(self, mode: str):
         """Create a handler for mode selection"""
+
         def handler():
             self.on_set_mode(mode)
+
         return handler
 
     def _is_mode_checked(self, mode: str):
         """Check if mode is currently selected"""
+
         def check(item):
             return self._status.recording_mode == mode
+
         return check
 
     def build(self) -> Menu:
@@ -81,10 +89,7 @@ class MenuBuilder:
 
         # Recording button: "Start" (green) when not recording, "Stop" (red) when recording
         # Note: pystray doesn't support colored text, but we use clear labels
-        if status.is_recording:
-            recording_text = "■ Stop Recording"
-        else:
-            recording_text = "▶ Start Recording"
+        recording_text = "■ Stop Recording" if status.is_recording else "▶ Start Recording"
 
         # Sync text with count
         if status.is_syncing:
@@ -100,12 +105,7 @@ class MenuBuilder:
 
         # Mode submenu
         mode_items = [
-            Item(
-                mode,
-                self._make_mode_handler(mode),
-                checked=self._is_mode_checked(mode),
-                radio=True
-            )
+            Item(mode, self._make_mode_handler(mode), checked=self._is_mode_checked(mode), radio=True)
             for mode in CAPTURE_MODES
         ]
 
@@ -128,10 +128,7 @@ class MenuBuilder:
         # Add update notification if available
         if self._update_info and self.on_download_update:
             items.append(Menu.SEPARATOR)
-            items.append(Item(
-                f"Update Available: v{self._update_info['latest_version']}",
-                self.on_download_update
-            ))
+            items.append(Item(f"Update Available: v{self._update_info['latest_version']}", self.on_download_update))
 
         items.append(Menu.SEPARATOR)
         items.append(Item("Quit", self.on_quit))
