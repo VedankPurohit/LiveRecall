@@ -2,6 +2,7 @@
 LiveRecall API
 FastAPI application for controlling LiveRecall
 """
+
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -9,18 +10,18 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-from api.routes import recording, sync, search, screenshots, status, compression
+from api.routes import compression, recording, screenshots, search, status, sync
 from core.database import db
 
 
 def _get_static_dir() -> Path:
     """Get the path to static web UI files (works for both dev and frozen)"""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # PyInstaller: look in _MEIPASS (temp extraction dir) or next to executable
-        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
         # Try _MEIPASS/web/out first, then next to exe
         if (base / "web" / "out").exists():
             return base / "web" / "out"
@@ -52,8 +53,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("🛑 LiveRecall API shutting down...")
     from core.capture import capture_service
-    from core.processor import processor_service
     from core.embeddings import unload_model
+    from core.processor import processor_service
 
     # Stop services
     capture_service.stop()
@@ -107,10 +108,7 @@ async def strip_trailing_slash(request: Request, call_next):
     if path.startswith("/api/") and path.endswith("/") and len(path) > 5:
         # Preserve query string
         new_path = path.rstrip("/")
-        if request.url.query:
-            new_url = f"{new_path}?{request.url.query}"
-        else:
-            new_url = new_path
+        new_url = f"{new_path}?{request.url.query}" if request.url.query else new_path
         return RedirectResponse(url=new_url, status_code=307)
     return await call_next(request)
 

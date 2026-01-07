@@ -2,20 +2,20 @@
 Backend subprocess manager
 Spawns and manages the FastAPI uvicorn server
 """
+
 import subprocess
 import sys
-import time
 import threading
+import time
 from pathlib import Path
-from typing import Optional, Union
 
-from .config import API_HOST, API_PORT, STARTUP_TIMEOUT
 from .api_client import api_client
+from .config import API_HOST, API_PORT, STARTUP_TIMEOUT
 
 
 def is_frozen() -> bool:
     """Check if running as a frozen PyInstaller app"""
-    return getattr(sys, 'frozen', False)
+    return getattr(sys, "frozen", False)
 
 
 def _run_api_server_thread(host: str, port: int, ready_event: threading.Event):
@@ -24,6 +24,7 @@ def _run_api_server_thread(host: str, port: int, ready_event: threading.Event):
     This is used when running as a frozen PyInstaller app.
     """
     import uvicorn
+
     from api.main import app
 
     # Create a custom config to signal when ready
@@ -41,9 +42,9 @@ class BackendManager:
     """Manages the FastAPI backend as a subprocess or thread"""
 
     def __init__(self):
-        self._process: Optional[subprocess.Popen] = None
-        self._server_thread: Optional[threading.Thread] = None
-        self._restart_thread: Optional[threading.Thread] = None
+        self._process: subprocess.Popen | None = None
+        self._server_thread: threading.Thread | None = None
+        self._restart_thread: threading.Thread | None = None
         self._should_restart = True
         self._lock = threading.Lock()
         self._frozen = is_frozen()
@@ -76,9 +77,7 @@ class BackendManager:
                     # Frozen app: use threading (more reliable in PyInstaller)
                     self._ready_event.clear()
                     self._server_thread = threading.Thread(
-                        target=_run_api_server_thread,
-                        args=(API_HOST, API_PORT, self._ready_event),
-                        daemon=True
+                        target=_run_api_server_thread, args=(API_HOST, API_PORT, self._ready_event), daemon=True
                     )
                     self._server_thread.start()
                     # Wait for thread to signal it's starting
@@ -99,8 +98,10 @@ class BackendManager:
                             sys.executable,
                             str(main_py),
                             "--api-only",
-                            "--host", API_HOST,
-                            "--port", str(API_PORT),
+                            "--host",
+                            API_HOST,
+                            "--port",
+                            str(API_PORT),
                         ],
                         stdout=None,  # Inherit parent's stdout
                         stderr=None,  # Inherit parent's stderr
@@ -164,10 +165,7 @@ class BackendManager:
         """Enable automatic restart on crash"""
         self._should_restart = True
         if self._restart_thread is None or not self._restart_thread.is_alive():
-            self._restart_thread = threading.Thread(
-                target=self._monitor_loop,
-                daemon=True
-            )
+            self._restart_thread = threading.Thread(target=self._monitor_loop, daemon=True)
             self._restart_thread.start()
 
     def _monitor_loop(self):

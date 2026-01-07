@@ -3,6 +3,7 @@
 Generate app icons for LiveRecall
 Creates icons for macOS (.icns) and Windows (.ico)
 """
+
 import math
 import subprocess
 import tempfile
@@ -25,7 +26,7 @@ def create_app_icon(size: int) -> Image.Image:
     Returns a high-quality icon at the specified size
     """
     # Create RGBA image with dark background
-    img = Image.new('RGBA', (size, size), BG_COLOR)
+    img = Image.new("RGBA", (size, size), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
     # Calculate dimensions
@@ -58,10 +59,7 @@ def create_app_icon(size: int) -> Image.Image:
     base2_x = arrow_x + arrow_size * 0.5 * math.cos(tangent_angle + math.pi + spread_angle)
     base2_y = arrow_y + arrow_size * 0.5 * math.sin(tangent_angle + math.pi + spread_angle)
 
-    draw.polygon(
-        [(tip_x, tip_y), (base1_x, base1_y), (base2_x, base2_y)],
-        fill=FG_COLOR
-    )
+    draw.polygon([(tip_x, tip_y), (base1_x, base1_y), (base2_x, base2_y)], fill=FG_COLOR)
 
     return img
 
@@ -90,9 +88,7 @@ def create_icns():
 
         # Convert to icns using iconutil
         icns_path = ASSETS / "icon.icns"
-        subprocess.run([
-            "iconutil", "-c", "icns", str(iconset), "-o", str(icns_path)
-        ], check=True)
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(icns_path)], check=True)
 
         print(f"Created: {icns_path}")
 
@@ -111,7 +107,7 @@ def create_ico():
 
     # Save as ICO
     ico_path = ASSETS / "icon.ico"
-    images[0].save(ico_path, format='ICO', sizes=[(s, s) for s in sizes])
+    images[0].save(ico_path, format="ICO", sizes=[(s, s) for s in sizes])
     print(f"Created: {ico_path}")
 
 
@@ -121,7 +117,7 @@ def create_png():
 
     icon = create_app_icon(1024)
     png_path = ASSETS / "icon.png"
-    icon.save(png_path, format='PNG')
+    icon.save(png_path, format="PNG")
     print(f"Created: {png_path}")
 
 
@@ -134,6 +130,7 @@ def main():
 
     # Only create icns on macOS
     import platform
+
     if platform.system() == "Darwin":
         create_icns()
     else:

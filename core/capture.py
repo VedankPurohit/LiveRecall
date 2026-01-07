@@ -3,17 +3,16 @@ LiveRecall Screen Capture
 Cross-platform screenshot capture using mss
 Lightweight - no CLIP model, just saves images with has_embedding=0
 """
-import os
-import time
-import threading
-from pathlib import Path
-from typing import Optional, Callable
 
-import numpy as np
+import threading
+import time
+from collections.abc import Callable
+
 import cv2
+import mss
+import numpy as np
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
-import mss
 
 from core.config import config, get_screenshots_dir
 from core.database import db
@@ -24,15 +23,15 @@ class CaptureService:
 
     def __init__(self):
         self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self._previous_screenshot: Optional[np.ndarray] = None
-        self._on_capture: Optional[Callable[[str], None]] = None
+        self._thread: threading.Thread | None = None
+        self._previous_screenshot: np.ndarray | None = None
+        self._on_capture: Callable[[str], None] | None = None
 
     @property
     def is_running(self) -> bool:
         return self._running
 
-    def start(self, on_capture: Optional[Callable[[str], None]] = None):
+    def start(self, on_capture: Callable[[str], None] | None = None):
         """Start capturing screenshots in background"""
         if self._running:
             return

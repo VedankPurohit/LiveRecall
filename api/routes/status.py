@@ -2,25 +2,26 @@
 Status API Routes
 System health and status endpoints
 """
+
 from fastapi import APIRouter
 
 from api.schemas import (
-    SystemStatus,
-    RecordingStatus,
-    DatabaseStats,
-    ModelStatus,
     AppConfig,
     CaptureConfig,
+    CaptureMode,
     CompressionConfig,
     ConfigUpdateRequest,
-    SuccessResponse,
-    CaptureMode,
+    DatabaseStats,
+    ModelStatus,
+    RecordingStatus,
     SafeModeLevel,
     SimilarityMetric,
+    SuccessResponse,
+    SystemStatus,
 )
-from core.database import db
 from core.capture import capture_service
 from core.config import config
+from core.database import db
 from core.embeddings import get_model_status, set_auto_unload_timeout
 
 # Version

@@ -1,9 +1,10 @@
 """
 HTTP client for communicating with the FastAPI backend
 """
-import httpx
-from typing import Optional
+
 from dataclasses import dataclass
+
+import httpx
 
 from .config import API_BASE_URL, HEALTH_CHECK_TIMEOUT
 
@@ -11,6 +12,7 @@ from .config import API_BASE_URL, HEALTH_CHECK_TIMEOUT
 @dataclass
 class SystemStatus:
     """Parsed system status from API"""
+
     is_recording: bool = False
     recording_mode: str = "normal"
     total_screenshots: int = 0
@@ -19,7 +21,7 @@ class SystemStatus:
     sync_progress: int = 0
     sync_total: int = 0
     model_loaded: bool = False
-    model_device: Optional[str] = None
+    model_device: str | None = None
     healthy: bool = False
 
 
@@ -28,7 +30,7 @@ class APIClient:
 
     def __init__(self, base_url: str = API_BASE_URL):
         self.base_url = base_url
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     @property
     def client(self) -> httpx.Client:
@@ -121,10 +123,7 @@ class APIClient:
     def set_capture_mode(self, mode: str) -> bool:
         """Set capture mode"""
         try:
-            resp = self.client.put(
-                f"{self.base_url}/config",
-                json={"capture_mode": mode}
-            )
+            resp = self.client.put(f"{self.base_url}/config", json={"capture_mode": mode})
             return resp.status_code == 200
         except Exception:
             return False

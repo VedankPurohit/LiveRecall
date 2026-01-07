@@ -2,23 +2,24 @@
 Sync API Routes
 Process unsynced screenshots with CLIP embeddings
 """
+
 from fastapi import APIRouter, BackgroundTasks
 
 from api.schemas import (
-    SyncStatus,
+    ModelStatus,
+    SuccessResponse,
     SyncStartRequest,
     SyncStartResponse,
-    SuccessResponse,
-    ModelStatus,
+    SyncStatus,
 )
 from core.database import db
-from core.processor import processor_service, SyncProgress
 from core.embeddings import (
-    is_loaded,
-    unload_model,
     get_model_status,
+    is_loaded,
     set_auto_unload_timeout,
+    unload_model,
 )
+from core.processor import SyncProgress, processor_service
 
 router = APIRouter(prefix="/sync", tags=["Sync"])
 
@@ -101,6 +102,7 @@ async def get_unsynced_count():
 # =============================================================================
 # Model Management
 # =============================================================================
+
 
 @router.get("/model", response_model=ModelStatus)
 async def get_model_status_endpoint():

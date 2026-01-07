@@ -1,8 +1,10 @@
 """
 Tests for API endpoints
 """
+
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 
@@ -20,6 +22,7 @@ def api_client():
         }
 
         from api.main import app
+
         client = TestClient(app)
         yield client
 
@@ -33,9 +36,10 @@ class TestHealthEndpoints:
     @patch("api.routes.status.get_model_status")
     def test_health_check(self, mock_model, mock_config, mock_capture, mock_db):
         """Health endpoint should return ok"""
-        from api.routes.status import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.status import router
 
         app = FastAPI()
         app.include_router(router)
@@ -53,9 +57,10 @@ class TestHealthEndpoints:
     @patch("api.routes.status.get_model_status")
     def test_status_endpoint(self, mock_model, mock_config, mock_capture, mock_db):
         """Status endpoint should return system status"""
-        from api.routes.status import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.status import router
 
         # Setup mocks
         mock_db.get_stats.return_value = {
@@ -96,9 +101,10 @@ class TestConfigEndpoints:
     @patch("api.routes.status.get_model_status")
     def test_get_config(self, mock_model, mock_config, mock_db):
         """Should return current configuration"""
-        from api.routes.status import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.status import router
 
         # Setup mock config
         mock_config.capture.mode = "normal"
@@ -112,6 +118,7 @@ class TestConfigEndpoints:
         mock_config.encryption_enabled = True
         mock_config.safe_mode_enabled = True
         mock_config.safe_mode_level = "mid"
+        mock_config.similarity_metric = "cosine"
         mock_model.return_value = {"auto_unload_seconds": 300}
 
         app = FastAPI()
@@ -130,9 +137,10 @@ class TestConfigEndpoints:
     @patch("api.routes.status.set_auto_unload_timeout")
     def test_update_config(self, mock_set_timeout, mock_config, mock_db):
         """Should update configuration"""
-        from api.routes.status import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.status import router
 
         mock_config.capture.quality = 95
         mock_config.compression.enabled = False
@@ -141,10 +149,13 @@ class TestConfigEndpoints:
         app.include_router(router)
         client = TestClient(app)
 
-        response = client.put("/config", json={
-            "capture_quality": 90,
-            "compression_enabled": True,
-        })
+        response = client.put(
+            "/config",
+            json={
+                "capture_quality": 90,
+                "compression_enabled": True,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -156,10 +167,11 @@ class TestCompressionEndpoints:
     @patch("api.routes.compression.compression_service")
     def test_get_compression_status(self, mock_service):
         """Should return compression status"""
-        from api.routes.compression import router
-        from core.compression import CompressionProgress
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+        from core.compression import CompressionProgress
 
         mock_service.progress = CompressionProgress(
             total=10,
@@ -185,9 +197,10 @@ class TestCompressionEndpoints:
     @patch("api.routes.compression.config")
     def test_start_compression(self, mock_config, mock_db, mock_service):
         """Should start compression"""
-        from api.routes.compression import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
 
         mock_service.is_running = False
         mock_config.compression.after_days = 60
@@ -210,9 +223,10 @@ class TestCompressionEndpoints:
     @patch("api.routes.compression.config")
     def test_start_compression_already_running(self, mock_config, mock_db, mock_service):
         """Should not start if already running"""
-        from api.routes.compression import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
 
         mock_service.is_running = True
 
@@ -230,9 +244,10 @@ class TestCompressionEndpoints:
     @patch("api.routes.compression.config")
     def test_get_compression_stats(self, mock_config, mock_db):
         """Should return compression statistics"""
-        from api.routes.compression import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
 
         mock_config.compression.after_days = 60
         mock_db.get_compression_stats.return_value = {
@@ -260,9 +275,10 @@ class TestSearchEndpoints:
     @patch("api.routes.search.get_text_embedding")
     def test_search_no_synced(self, mock_embedding, mock_db):
         """Should error if no synced screenshots"""
-        from api.routes.search import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.search import router
 
         mock_db.get_stats.return_value = {"synced": 0}
 
@@ -278,9 +294,10 @@ class TestSearchEndpoints:
     @patch("api.routes.search.get_text_embedding")
     def test_search_success(self, mock_get_embedding, mock_db):
         """Should return search results"""
-        from api.routes.search import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.search import router
 
         mock_db.get_stats.return_value = {"synced": 10}
         mock_get_embedding.return_value = [0.1] * 768
@@ -297,11 +314,14 @@ class TestSearchEndpoints:
         app.include_router(router)  # Router already has /search prefix
         client = TestClient(app)
 
-        response = client.post("/search", json={
-            "query": "blue shirt",
-            "limit": 10,
-            "safe_mode": False,
-        })
+        response = client.post(
+            "/search",
+            json={
+                "query": "blue shirt",
+                "limit": 10,
+                "safe_mode": False,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["total_results"] == 1
@@ -315,9 +335,10 @@ class TestRecordingEndpoints:
     @patch("api.routes.recording.config")
     def test_start_recording(self, mock_config, mock_service):
         """Should start recording"""
-        from api.routes.recording import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.recording import router
 
         mock_service.is_running = False
         mock_config.capture.mode = "normal"
@@ -338,9 +359,10 @@ class TestRecordingEndpoints:
     @patch("api.routes.recording.config")
     def test_stop_recording(self, mock_config, mock_service):
         """Should stop recording"""
-        from api.routes.recording import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api.routes.recording import router
 
         mock_service.is_running = True
         mock_config.capture.mode = "normal"

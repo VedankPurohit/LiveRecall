@@ -1,8 +1,8 @@
 """
 Tests for core/database.py
 """
+
 import pytest
-from datetime import datetime, timedelta
 
 
 class TestDatabaseBasics:
@@ -169,9 +169,9 @@ class TestCompression:
 
         # With 0 days, should find it (it's from now)
         # With 1 day, shouldn't find it yet
-        compressible = mock_db.get_compressible_screenshots(older_than_days=0)
         # Note: Just added, so created_at is now - won't be older than 0 days
         # This tests the query structure works
+        mock_db.get_compressible_screenshots(older_than_days=0)
 
     def test_get_compressible_excludes_already_compressed(self, mock_db, temp_dir):
         """Should not return already compressed screenshots"""
