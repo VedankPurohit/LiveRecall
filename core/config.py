@@ -98,6 +98,7 @@ class Config:
     safe_mode_enabled: bool = True
     safe_mode_level: str = "mid"  # low, mid, high
     similarity_metric: str = "cosine"  # "cosine" or "distance"
+    last_seen_version: str = ""  # Track version for setup flow
 
     # Paths (computed)
     @property
@@ -132,6 +133,7 @@ class Config:
             "safe_mode_enabled": self.safe_mode_enabled,
             "safe_mode_level": self.safe_mode_level,
             "similarity_metric": self.similarity_metric,
+            "last_seen_version": self.last_seen_version,
         }
         with open(config_path, "w") as f:
             json.dump(data, f, indent=2)
@@ -167,6 +169,7 @@ class Config:
             self.safe_mode_enabled = data.get("safe_mode_enabled", self.safe_mode_enabled)
             self.safe_mode_level = data.get("safe_mode_level", self.safe_mode_level)
             self.similarity_metric = data.get("similarity_metric", self.similarity_metric)
+            self.last_seen_version = data.get("last_seen_version", self.last_seen_version)
 
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Warning: Could not load config: {e}")

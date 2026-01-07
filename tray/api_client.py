@@ -128,6 +128,16 @@ class APIClient:
         except Exception:
             return False
 
+    def get_json(self, endpoint: str) -> dict | None:
+        """Get JSON from an arbitrary endpoint"""
+        try:
+            resp = self.client.get(f"{self.base_url}{endpoint}")
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except Exception:
+            return None
+
 
 # Global client instance
 api_client = APIClient()

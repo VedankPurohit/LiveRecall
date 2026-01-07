@@ -12,7 +12,7 @@ from core.updater import VERSION, check_for_updates_async
 
 from .api_client import SystemStatus, api_client
 from .backend import backend_manager
-from .config import STATUS_POLL_INTERVAL
+from .config import STATUS_POLL_INTERVAL, WEB_UI_URL
 from .icons import get_app_icon
 from .menu import MenuBuilder
 
@@ -90,6 +90,24 @@ class TrayApp:
             self._poll_status()
             time.sleep(STATUS_POLL_INTERVAL)
 
+    def _check_and_open_setup(self):
+        """Check if setup is needed and open setup page"""
+        try:
+            # Wait a moment for backend to be ready
+            time.sleep(1)
+
+            # Check setup status via API
+            status = api_client.get_json("/setup/status")
+
+            if status and status.get("needs_setup", False):
+                last_version = status.get("last_seen_version", "none")
+                current_version = status.get("current_version", "unknown")
+                print(f"Version change detected: {last_version} -> {current_version}")
+                print("Opening setup page...")
+                webbrowser.open(f"{WEB_UI_URL}/setup")
+        except Exception as e:
+            print(f"Warning: Could not check setup status: {e}")
+
     def start(self):
         """Start the tray application"""
         # Start backend
@@ -98,6 +116,9 @@ class TrayApp:
             print("Warning: Backend failed to start, continuing anyway...")
 
         backend_manager.enable_auto_restart()
+
+        # Check if setup is needed (version change or first run)
+        self._check_and_open_setup()
 
         # Create menu builder
         self._menu_builder = MenuBuilder(
