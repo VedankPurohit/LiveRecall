@@ -1,5 +1,10 @@
 # Code Style and Conventions
 
+## Attribution
+- Never add "Claude Code", "Claude", or any AI name/attribution to commits, PRs, or any other content
+- Do not include AI co-author tags in commits
+- Do not mention AI assistance in PR descriptions
+
 ## Python
 
 ### General Style
