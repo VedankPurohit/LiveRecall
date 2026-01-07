@@ -56,7 +56,8 @@ class Database:
     @contextmanager
     def cursor(self):
         """Context manager for cursor"""
-        assert self.conn is not None, "Database not connected"
+        if self.conn is None:
+            raise RuntimeError("Database not connected")
         cur = self.conn.cursor()
         try:
             yield cur
