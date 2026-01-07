@@ -376,6 +376,19 @@ class ConfigUpdateRequest(BaseModel):
 
 
 # =============================================================================
+# Setup
+# =============================================================================
+
+
+class SetupStatus(BaseModel):
+    """Setup status for version change detection"""
+
+    current_version: str
+    last_seen_version: str
+    needs_setup: bool
+
+
+# =============================================================================
 # Generic Responses
 # =============================================================================
 

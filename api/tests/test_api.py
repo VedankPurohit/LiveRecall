@@ -378,3 +378,129 @@ class TestRecordingEndpoints:
         data = response.json()
         assert data["success"] is True
         mock_service.stop.assert_called_once()
+
+
+class TestSetupEndpoints:
+    """Test setup API endpoints for version-change detection"""
+
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_setup_status_needs_setup(self, mock_config):
+        """Should return needs_setup=True when version differs"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_config.last_seen_version = "0.1.1"
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["current_version"] == "0.1.2"
+        assert data["last_seen_version"] == "0.1.1"
+        assert data["needs_setup"] is True
+
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_setup_status_no_setup_needed(self, mock_config):
+        """Should return needs_setup=False when version matches"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_config.last_seen_version = "0.1.2"
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["needs_setup"] is False
+
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_setup_status_first_run(self, mock_config):
+        """Should return needs_setup=True on first run (empty version)"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_config.last_seen_version = ""
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["needs_setup"] is True
+
+    @patch("api.routes.setup.subprocess")
+    @patch("api.routes.setup.sys")
+    def test_reset_permissions_macos(self, mock_sys, mock_subprocess):
+        """Should run tccutil on macOS"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_sys.platform = "darwin"
+        mock_subprocess.run.return_value.returncode = 0
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post("/setup/reset-permissions")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        mock_subprocess.run.assert_called_once()
+
+    @patch("api.routes.setup.sys")
+    def test_reset_permissions_non_macos(self, mock_sys):
+        """Should reject on non-macOS platforms"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_sys.platform = "linux"
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post("/setup/reset-permissions")
+        assert response.status_code == 400
+        assert "only available on macOS" in response.json()["detail"]
+
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_complete_setup(self, mock_config):
+        """Should update last_seen_version and save"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post("/setup/complete")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert mock_config.last_seen_version == "0.1.2"
+        mock_config.save.assert_called_once()

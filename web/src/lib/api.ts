@@ -188,3 +188,20 @@ export function getImageUrl(imagePath: string): string {
   // The API serves images via /api/v1/screenshots/image endpoint
   return `${API_BASE}/screenshots/image?path=${encodeURIComponent(imagePath)}`;
 }
+
+// Setup
+export async function getSetupStatus(): Promise<{
+  current_version: string;
+  last_seen_version: string;
+  needs_setup: boolean;
+}> {
+  return fetchApi('/setup/status');
+}
+
+export async function resetPermissions(): Promise<{ success: boolean; message: string }> {
+  return fetchApi('/setup/reset-permissions', { method: 'POST' });
+}
+
+export async function completeSetup(): Promise<{ success: boolean; message: string }> {
+  return fetchApi('/setup/complete', { method: 'POST' });
+}

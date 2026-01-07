@@ -25,6 +25,9 @@ import {
   getDensity,
   deleteScreenshot,
   getImageUrl,
+  getSetupStatus,
+  resetPermissions,
+  completeSetup,
 } from '@/lib/api';
 
 // Helper to mock fetch responses
@@ -410,6 +413,48 @@ describe('API Client', () => {
       });
 
       await expect(getHealth()).rejects.toThrow('Request failed');
+    });
+  });
+
+  describe('Setup', () => {
+    it('should fetch setup status', async () => {
+      const setupData = {
+        current_version: '0.1.2',
+        last_seen_version: '0.1.1',
+        needs_setup: true,
+      };
+      mockFetch(setupData);
+
+      const result = await getSetupStatus();
+
+      expect(result).toEqual(setupData);
+      expect(fetch).toHaveBeenCalledWith('/api/v1/setup/status', expect.any(Object));
+    });
+
+    it('should reset permissions', async () => {
+      const response = { success: true, message: 'Permissions reset' };
+      mockFetch(response);
+
+      const result = await resetPermissions();
+
+      expect(result).toEqual(response);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/setup/reset-permissions',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('should complete setup', async () => {
+      const response = { success: true, message: 'Setup completed' };
+      mockFetch(response);
+
+      const result = await completeSetup();
+
+      expect(result).toEqual(response);
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/setup/complete',
+        expect.objectContaining({ method: 'POST' })
+      );
     });
   });
 });
