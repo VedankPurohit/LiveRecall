@@ -3,6 +3,7 @@ Programmatic icon generation using PIL
 """
 
 import math
+import sys
 
 from PIL import Image, ImageDraw
 
@@ -10,6 +11,8 @@ from .config import get_icon_size
 
 # Colors (RGB)
 COLOR_WHITE = (255, 255, 255)
+
+IS_WINDOWS = sys.platform == "win32"
 
 
 def create_app_icon(size: tuple[int, int] = None) -> Image.Image:
@@ -76,5 +79,16 @@ def create_app_icon(size: tuple[int, int] = None) -> Image.Image:
 
 
 def get_app_icon() -> Image.Image:
-    """Get the static app icon for the menu bar"""
-    return create_app_icon()
+    """Get the static app icon for the menu bar/system tray"""
+    icon = create_app_icon()
+
+    # On Windows, convert RGBA to RGB with a dark background for better visibility
+    # Windows system tray has issues with transparent icons
+    if IS_WINDOWS:
+        # Create a dark background (Windows taskbar is usually dark)
+        bg = Image.new("RGB", icon.size, (30, 30, 30))
+        # Paste the icon on top, using alpha channel as mask
+        bg.paste(icon, mask=icon.split()[3] if icon.mode == "RGBA" else None)
+        return bg
+
+    return icon
