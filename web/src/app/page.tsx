@@ -254,11 +254,8 @@ export default function Home() {
 
   // Load more gallery images before current position (for bidirectional scroll)
   const loadMoreGalleryBefore = useCallback(async () => {
-    // Check if we should skip this load (after navigation)
-    if (skipLoadBeforeRef.current) {
-      skipLoadBeforeRef.current = false;
-      return;
-    }
+    // Skip if flag is set (navigation in progress, flag cleared after scroll completes)
+    if (skipLoadBeforeRef.current) return;
 
     if (isLoadingMoreBefore || !hasMoreGalleryBefore || galleryOffset <= 0 || query.trim()) return;
 
@@ -518,22 +515,25 @@ export default function Home() {
     try {
       const ids = Array.from(selection.selectedIds);
       await bulkHideScreenshots(ids);
-      selection.clearSelection();
-      // Refresh data
-      await fetchData();
-      if (activeView === 'search') {
-        if (query.trim()) {
-          // Re-query search to refresh results
-          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
-          setSearchResults(data?.results || []);
-        } else {
-          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
-          if (data?.screenshots) {
-            setGallerySnapshots(data.screenshots);
-            setGalleryTotal(data.total);
+
+      // Immediately remove hidden items from view (if visibility filter excludes them)
+      if (visibilityFilter === 'visible_only') {
+        const idSet = new Set(ids);
+        if (activeView === 'search') {
+          if (query.trim()) {
+            setSearchResults(prev => prev.filter(s => !idSet.has(s.id)));
+          } else {
+            setGallerySnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+            setGalleryTotal(prev => Math.max(0, prev - ids.length));
           }
+        } else if (activeView === 'timeline') {
+          setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
         }
       }
+
+      selection.clearSelection();
+      // Refresh background data (for totals, stats etc.)
+      fetchData();
     } catch (err) {
       console.error('Failed to hide screenshots:', err);
     } finally {
@@ -547,22 +547,25 @@ export default function Home() {
     try {
       const ids = Array.from(selection.selectedIds);
       await bulkUnhideScreenshots(ids);
-      selection.clearSelection();
-      // Refresh data
-      await fetchData();
-      if (activeView === 'search') {
-        if (query.trim()) {
-          // Re-query search to refresh results
-          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
-          setSearchResults(data?.results || []);
-        } else {
-          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
-          if (data?.screenshots) {
-            setGallerySnapshots(data.screenshots);
-            setGalleryTotal(data.total);
+
+      // Immediately remove unhidden items from view (if viewing hidden_only)
+      if (visibilityFilter === 'hidden_only') {
+        const idSet = new Set(ids);
+        if (activeView === 'search') {
+          if (query.trim()) {
+            setSearchResults(prev => prev.filter(s => !idSet.has(s.id)));
+          } else {
+            setGallerySnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+            setGalleryTotal(prev => Math.max(0, prev - ids.length));
           }
+        } else if (activeView === 'timeline') {
+          setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
         }
       }
+
+      selection.clearSelection();
+      // Refresh background data (for totals, stats etc.)
+      fetchData();
     } catch (err) {
       console.error('Failed to unhide screenshots:', err);
     } finally {
@@ -702,7 +705,13 @@ export default function Home() {
           } else {
             console.warn(`Could not find element grid-item-${screenshot.id} to scroll to`);
           }
-          setTimeout(() => setHighlightedId(null), 2000);
+
+          // Clear the skip flag after scroll completes (give time for scroll animation)
+          // This ensures scrolling up to load older images works after navigation
+          setTimeout(() => {
+            skipLoadBeforeRef.current = false;
+            setHighlightedId(null);
+          }, 500);
         }, 100);
       });
 
