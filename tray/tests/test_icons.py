@@ -2,10 +2,14 @@
 Tests for tray/icons.py
 """
 
+import sys
+
 from PIL import Image
 
 from tray.config import ICON_SIZE_DEFAULT, ICON_SIZE_MAC, get_icon_size
 from tray.icons import create_app_icon, get_app_icon
+
+IS_WINDOWS = sys.platform == "win32"
 
 
 class TestCreateAppIcon:
@@ -66,6 +70,8 @@ class TestGetAppIcon:
         assert icon.size == expected_size
 
     def test_is_rgba(self):
-        """Should be RGBA mode"""
+        """Should be RGBA on macOS/Linux, RGB on Windows"""
         icon = get_app_icon()
-        assert icon.mode == "RGBA"
+        # Windows converts to RGB with solid background for better tray visibility
+        expected_mode = "RGB" if IS_WINDOWS else "RGBA"
+        assert icon.mode == expected_mode
