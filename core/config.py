@@ -4,48 +4,47 @@ Platform-specific paths and settings with persistence
 """
 
 import json
-import os
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-# Platform detection
-PLATFORM: Literal["macos", "windows", "linux"] = (
-    "macos" if sys.platform == "darwin" else "windows" if sys.platform == "win32" else "linux"
-)
+from core.platform import current_platform
+
+# Platform detection - delegate to platform layer
+PLATFORM: Literal["macos", "windows", "linux"] = current_platform.name
 
 
 def get_data_dir() -> Path:
-    """Get platform-specific data directory"""
-    if PLATFORM == "macos":
-        base = Path.home() / "Library" / "Application Support"
-    elif PLATFORM == "windows":
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-    else:  # linux
-        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    """Get platform-specific data directory.
 
-    data_dir = base / "LiveRecall"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir
+    Delegates to the platform abstraction layer.
+    """
+    return current_platform.get_data_dir()
 
 
 def get_screenshots_dir() -> Path:
-    """Get screenshots storage directory"""
-    screenshots_dir = get_data_dir() / "screenshots"
-    screenshots_dir.mkdir(parents=True, exist_ok=True)
-    return screenshots_dir
+    """Get screenshots storage directory.
+
+    Delegates to the platform abstraction layer.
+    """
+    return current_platform.get_screenshots_dir()
 
 
 def get_database_path() -> Path:
-    """Get database file path"""
-    return get_data_dir() / "liverecall.db"
+    """Get database file path.
+
+    Delegates to the platform abstraction layer.
+    """
+    return current_platform.get_database_path()
 
 
 def get_config_path() -> Path:
-    """Get config file path"""
-    return get_data_dir() / "config.json"
+    """Get config file path.
+
+    Delegates to the platform abstraction layer.
+    """
+    return current_platform.get_config_path()
 
 
 @dataclass
