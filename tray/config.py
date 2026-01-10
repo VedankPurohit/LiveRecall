@@ -33,9 +33,11 @@ PLATFORM = current_platform.name
 
 
 def get_icon_size() -> tuple[int, int]:
-    """Get platform-appropriate icon size.
-
-    Delegates to the platform abstraction layer.
+    """
+    Return the tray icon size appropriate for the current platform.
+    
+    Returns:
+        tuple[int, int]: Width and height of the tray icon in pixels.
     """
     return current_platform.get_tray_icon_size()
 

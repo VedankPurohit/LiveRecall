@@ -22,13 +22,19 @@ IS_WINDOWS = sys.platform == "win32"
 
 
 def open_data_folder():
-    """Open the data folder in file explorer"""
+    """
+    Open the application's data directory in the system file explorer.
+    
+    Determines the data directory using the platform abstraction and opens that folder with the platform's default file manager.
+    """
     data_dir = current_platform.get_data_dir()
     current_platform.open_folder(data_dir)
 
 
 def open_web_search():
-    """Open web UI search page"""
+    """
+    Open the application's web UI to the search view using the system's default web browser.
+    """
     webbrowser.open(f"{WEB_UI_URL}?view=search")
 
 
@@ -119,7 +125,14 @@ class MenuBuilder:
         return check
 
     def build(self) -> Menu:
-        """Build the menu structure"""
+        """
+        Constructs the system tray menu reflecting the builder's current SystemStatus.
+        
+        Builds menu entries for recording control, incognito durations (with remaining time when active), capture modes, sync state (including progress or pending count), statistics (snapshots and model status), web actions (search, timeline, open data folder), available update download (if update info and handler are present), and quit. Menu item labels and defaults are adjusted for platform specifics (e.g., Windows avoids Unicode symbols and omits macOS-style default highlighting).
+        
+        Returns:
+            Menu: A pystray Menu configured from the builder's current status.
+        """
         status = self._status
 
         # Recording button: "Start" (green) when not recording, "Stop" (red) when recording

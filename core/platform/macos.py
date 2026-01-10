@@ -25,7 +25,12 @@ class MacOSPlatform(PlatformBase):
 
     @property
     def name(self) -> Literal["macos", "windows", "linux"]:
-        """Return the platform identifier."""
+        """
+        Platform identifier for this implementation.
+        
+        Returns:
+            str: The literal "macos".
+        """
         return "macos"
 
     # -------------------------------------------------------------------------
@@ -33,10 +38,11 @@ class MacOSPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def get_data_dir(self) -> Path:
-        """Get macOS application data directory.
-
+        """
+        Return the macOS application data directory, creating it if missing.
+        
         Returns:
-            Path to ~/Library/Application Support/LiveRecall
+            Path: Path to the application's data directory at ~/Library/Application Support/<APP_NAME>.
         """
         data_dir = Path.home() / "Library" / "Application Support" / APP_NAME
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -47,10 +53,13 @@ class MacOSPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def open_folder(self, path: Path) -> None:
-        """Open a folder in Finder.
-
-        Args:
-            path: Path to the folder to open.
+        """
+        Open the given folder in macOS Finder.
+        
+        Attempts to launch Finder for the provided path. On failure the error is logged and no exception is propagated.
+        
+        Parameters:
+            path (Path): Filesystem path to the folder to open.
         """
         try:
             subprocess.run(["open", str(path)], check=False)
@@ -62,22 +71,22 @@ class MacOSPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def needs_screen_permission(self) -> bool:
-        """macOS requires explicit screen recording permission.
-
+        """
+        Indicates that macOS requires explicit screen recording permission.
+        
         Returns:
-            True - macOS always requires permission.
+            True if the platform requires screen recording permission, False otherwise.
         """
         return True
 
     def check_screen_permission(self) -> bool:
-        """Check if screen recording permission is granted.
-
-        Note: There's no reliable programmatic way to check this on macOS
-        without actually attempting a screen capture. The mss library will
-        fail if permission is not granted.
-
+        """
+        Report whether screen recording permission is considered granted.
+        
+        Because macOS does not provide a reliable programmatic check without attempting capture, this method assumes permission is granted.
+        
         Returns:
-            True - we assume permission is granted and let capture fail if not.
+            bool: `True` indicating permission is assumed to be granted; actual denial may only be detected when performing a screen capture.
         """
         # TODO: Could potentially check TCC database or attempt a test capture
         return True
@@ -97,15 +106,13 @@ class MacOSPlatform(PlatformBase):
         return True
 
     def reset_screen_permission(self) -> tuple[bool, str]:
-        """Reset screen recording permission via tccutil.
-
-        This runs: tccutil reset ScreenCapture com.liverecall.app
-
-        This is useful after app updates when macOS invalidates the
-        permission for unsigned apps.
-
+        """
+        Reset the app's screen recording permission using tccutil.
+        
+        Runs `tccutil reset ScreenCapture <APP_BUNDLE_ID>` to clear macOS screen-capture permissions for the application. On success returns a message instructing the user to grant permission when prompted; on failure returns a descriptive error message (e.g., command failure, timeout, or missing `tccutil`).
+        
         Returns:
-            Tuple of (success, message).
+            (success, message): `True` and a success message if the reset succeeded; `False` and a human-readable error message otherwise.
         """
         try:
             result = subprocess.run(
@@ -137,28 +144,26 @@ class MacOSPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def is_autostart_enabled(self) -> bool:
-        """Check if auto-start is enabled.
-
-        Note: macOS Login Items are managed differently and checking
-        programmatically is complex. This is a stub for future implementation.
-
+        """
+        Report whether the application is configured to automatically start at macOS login.
+        
+        Currently unimplemented on macOS; this stub always returns False.
+        
         Returns:
-            False - stub implementation.
+            True if auto-start is enabled, False otherwise.
         """
         # TODO: Check Login Items via SMAppService or LaunchAgent
         # For now, return False as this feature needs more work on macOS
         return False
 
     def enable_autostart(self) -> bool:
-        """Enable auto-start on login.
-
-        Note: This is a stub. macOS auto-start requires either:
-        - SMAppService (for sandboxed apps)
-        - LaunchAgent plist (for non-sandboxed apps)
-        - Login Items via AppleScript/osascript
-
+        """
+        Enable application auto-start at user login.
+        
+        Currently unimplemented for macOS; this method always returns `False`. If the application executable path cannot be determined (development mode), it logs a warning and returns `False`.
+        
         Returns:
-            False - not yet implemented.
+            bool: `True` if auto-start was enabled, `False` otherwise.
         """
         exe_path = get_executable_path()
         if exe_path is None:
@@ -173,10 +178,13 @@ class MacOSPlatform(PlatformBase):
         return False
 
     def disable_autostart(self) -> bool:
-        """Disable auto-start on login.
-
+        """
+        Disable application auto-start on macOS login.
+        
+        Currently unimplemented; calling this always leaves auto-start unchanged and returns `False`.
+        
         Returns:
-            False - not yet implemented.
+            `False` because disabling auto-start is not implemented.
         """
         # TODO: Implement removal of login item
         logger.info("macOS autostart disable not yet implemented")
@@ -187,12 +195,10 @@ class MacOSPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def get_tray_icon_size(self) -> tuple[int, int]:
-        """Get macOS menu bar icon size.
-
-        macOS menu bar icons should be smaller (22x22) to match
-        the native menu bar aesthetic.
-
+        """
+        Provides the recommended size for a macOS menu bar (tray) icon.
+        
         Returns:
-            (22, 22) for macOS menu bar.
+            tuple[int, int]: Width and height in pixels for the icon — (22, 22).
         """
         return (22, 22)

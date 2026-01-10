@@ -36,11 +36,15 @@ class AutostartSetRequest(BaseModel):
 @router.get("/status", response_model=SetupStatus)
 async def get_setup_status():
     """
-    Check if setup is needed.
-
-    Returns whether the app version has changed since last run,
-    which indicates that screen recording permissions may need to be reset.
-    Also indicates if the platform requires permission setup.
+    Report setup and permission status for the current platform.
+    
+    Returns:
+        SetupStatus: Contains:
+            - current_version: the running application version.
+            - last_seen_version: the last version recorded in persistent config.
+            - needs_setup: `true` if `last_seen_version` is different from `current_version`.
+            - needs_permission: `true` if the current platform requires screen recording permission.
+            - platform: the name of the current platform.
     """
     needs_setup = config.last_seen_version != VERSION
     return SetupStatus(
@@ -55,13 +59,15 @@ async def get_setup_status():
 @router.post("/reset-permissions", response_model=SuccessResponse)
 async def reset_screen_capture_permissions():
     """
-    Reset screen capture permissions for LiveRecall.
-
-    On macOS: Runs tccutil reset ScreenCapture com.liverecall.app
-    On Windows: No-op (permissions not required)
-    On Linux: No-op (varies by desktop environment)
-
-    Returns success status and a message explaining the result.
+    Reset the operating system's screen capture permission state for the application.
+    
+    Delegates the reset operation to the current platform implementation and returns a result describing whether the reset succeeded.
+    
+    Returns:
+        SuccessResponse: `success` is `True` if the permission reset succeeded, `False` otherwise; `message` contains a human-readable result or error description.
+    
+    Raises:
+        HTTPException: Raised with status code 500 and the platform-provided error message if the reset operation fails.
     """
     success, message = current_platform.reset_screen_permission()
 
@@ -96,10 +102,13 @@ async def complete_setup():
 @router.get("/autostart", response_model=AutostartStatus)
 async def get_autostart_status():
     """
-    Check if auto-start on login is enabled.
-
-    Returns the current auto-start status and whether it's supported
-    on the current platform.
+    Report the system's auto-start-on-login status and whether the current platform supports controlling it.
+    
+    Returns:
+        autostart_status (AutostartStatus): Object with fields:
+            - enabled: `true` if auto-start on login is enabled, `false` otherwise.
+            - supported: `true` if the current platform supports auto-start control, `false` otherwise.
+            - platform: the current platform's name.
     """
     return AutostartStatus(
         enabled=current_platform.is_autostart_enabled(),
@@ -111,11 +120,16 @@ async def get_autostart_status():
 @router.post("/autostart", response_model=SuccessResponse)
 async def set_autostart(request: AutostartSetRequest):
     """
-    Enable or disable auto-start on login.
-
-    On Windows: Uses Registry (HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run)
-    On Linux: Uses XDG autostart desktop files
-    On macOS: Not yet implemented (requires Login Items)
+    Set whether the application should start automatically on user login.
+    
+    Parameters:
+        request (AutostartSetRequest): Desired auto-start state; set `request.enabled` to `True` to enable auto-start or `False` to disable it.
+    
+    Returns:
+        SuccessResponse: Object with `success` indicating the operation result and a human-readable `message`.
+    
+    Raises:
+        HTTPException: If enabling or disabling auto-start fails (HTTP 500).
     """
     if request.enabled:
         success = current_platform.enable_autostart()

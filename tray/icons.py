@@ -17,8 +17,13 @@ IS_WINDOWS = sys.platform == "win32"
 
 def create_app_icon(size: tuple[int, int] = None) -> Image.Image:
     """
-    Create the LiveRecall app icon - circular arrow (rewind/recall symbol)
-    High resolution white monochrome design for menu bar
+    Generate a white monochrome app icon showing a circular arc with an inward-pointing arrowhead.
+    
+    Parameters:
+        size (tuple[int, int] | None): (width, height) in pixels for the returned image. If `None`, the configured default icon size is used.
+    
+    Returns:
+        PIL.Image.Image: An RGBA image containing the white circular-arc-with-arrow icon at the requested size.
     """
     if size is None:
         size = get_icon_size()
@@ -79,7 +84,14 @@ def create_app_icon(size: tuple[int, int] = None) -> Image.Image:
 
 
 def get_app_icon() -> Image.Image:
-    """Get the static app icon for the menu bar/system tray"""
+    """
+    Provide the static app icon suitable for menu bar or system tray usage.
+    
+    On Windows the icon is flattened onto a dark RGB background to avoid transparency issues; on other platforms the icon is returned with its alpha channel preserved.
+    
+    Returns:
+        icon (Image.Image): The app icon image. On Windows this is an RGB image composited onto a dark background; on non-Windows platforms this is an RGBA image with transparency.
+    """
     icon = create_app_icon()
 
     # On Windows, convert RGBA to RGB with a dark background for better visibility
