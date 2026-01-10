@@ -102,7 +102,11 @@ class TrayApp:
                 self._icon.update_menu()
 
     def _poll_loop(self):
-        """Background polling loop"""
+        """
+        Continuously poll the backend status while the tray app is running.
+        
+        Repeatedly calls the instance's status poll routine and then waits STATUS_POLL_INTERVAL seconds between iterations. The loop stops when the app's running flag is cleared.
+        """
         while self._running:
             self._poll_status()
             time.sleep(STATUS_POLL_INTERVAL)

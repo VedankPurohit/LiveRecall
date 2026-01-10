@@ -25,15 +25,21 @@ APP_BUNDLE_ID = "com.liverecall.app"
 
 
 def is_frozen() -> bool:
-    """Check if running as a frozen PyInstaller application."""
+    """
+    Return whether the current process is a frozen executable (for example, created by PyInstaller).
+    
+    Returns:
+        bool: `True` if running as a frozen executable, `False` otherwise.
+    """
     return getattr(sys, "frozen", False)
 
 
 def get_executable_path() -> Path | None:
-    """Get path to the executable when running as frozen app.
-
+    """
+    Return the path to the bundled executable when running as a frozen application.
+    
     Returns:
-        Path to the executable, or None if running in development mode.
+        Path: Path to the executable when running frozen, or None when running in a non-frozen (development) environment.
     """
     if is_frozen():
         return Path(sys.executable)
@@ -73,41 +79,43 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def get_data_dir(self) -> Path:
-        """Get the platform-specific application data directory.
-
-        Creates the directory if it doesn't exist.
-
+        """
+        Return the platform-specific application data directory, creating it if necessary.
+        
+        This is the directory where the application stores user data:
+        - macOS: ~/Library/Application Support/LiveRecall
+        - Windows: %APPDATA%/LiveRecall
+        - Linux: $XDG_DATA_HOME/LiveRecall or ~/.local/share/LiveRecall
+        
         Returns:
-            Path to the data directory.
-                - macOS: ~/Library/Application Support/LiveRecall
-                - Windows: %APPDATA%/LiveRecall
-                - Linux: $XDG_DATA_HOME/LiveRecall or ~/.local/share/LiveRecall
+            Path to the platform data directory.
         """
         ...
 
     def get_config_path(self) -> Path:
-        """Get the configuration file path.
-
+        """
+        Get the path to the platform configuration file.
+        
         Returns:
-            Path to config.json in the data directory.
+            Path to the 'config.json' file located in the platform data directory.
         """
         return self.get_data_dir() / "config.json"
 
     def get_database_path(self) -> Path:
-        """Get the database file path.
-
+        """
+        Return the path to the application's SQLite database file.
+        
         Returns:
-            Path to liverecall.db in the data directory.
+            Path: Path to the `liverecall.db` file inside the platform-specific data directory.
         """
         return self.get_data_dir() / "liverecall.db"
 
     def get_screenshots_dir(self) -> Path:
-        """Get the screenshots storage directory.
-
-        Creates the directory if it doesn't exist.
-
+        """
+        Locate and ensure the application's screenshots storage directory exists.
+        
         Returns:
-            Path to the screenshots subdirectory.
+            Path to the screenshots subdirectory, created if it did not exist.
         """
         screenshots_dir = self.get_data_dir() / "screenshots"
         screenshots_dir.mkdir(parents=True, exist_ok=True)
@@ -119,18 +127,20 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def open_folder(self, path: Path) -> None:
-        """Open a folder in the system's file explorer.
-
-        Args:
-            path: Path to the folder to open.
+        """
+        Open the given directory in the system file explorer.
+        
+        Parameters:
+            path (Path): Path to the directory to open.
         """
         ...
 
     def open_url(self, url: str) -> None:
-        """Open a URL in the default browser.
-
-        Args:
-            url: The URL to open.
+        """
+        Open the given URL using the system's default web browser.
+        
+        Parameters:
+            url (str): The URL to open. Should be a valid absolute web URL (e.g., starting with "http://" or "https://").
         """
         webbrowser.open(url)
 
@@ -140,10 +150,11 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def needs_screen_permission(self) -> bool:
-        """Check if this platform requires explicit screen recording permission.
-
+        """
+        Determine whether the current platform requires an explicit screen-recording permission.
+        
         Returns:
-            True if the platform requires permission setup, False otherwise.
+            `True` if the platform requires screen recording permission, `False` otherwise.
         """
         ...
 
@@ -158,23 +169,23 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def request_screen_permission(self) -> bool:
-        """Request screen recording permission from the user.
-
+        """
+        Prompt the user to grant screen recording permission.
+        
         Returns:
-            True if the request was made (user may still deny), False on error.
+            `True` if the permission request was issued (the user may still deny), `False` if the request could not be initiated.
         """
         ...
 
     @abstractmethod
     def reset_screen_permission(self) -> tuple[bool, str]:
-        """Reset screen recording permission to trigger a new permission prompt.
-
-        This is useful when the app has been updated and permissions need
-        to be re-granted.
-
+        """
+        Reset the platform-specific screen-recording permission state to force the system to re-prompt for permission.
+        
+        Per-platform implementations may perform any necessary actions to clear or reset stored permission state. Returns whether the reset was performed and a human-readable message with details or error information.
+        
         Returns:
-            Tuple of (success, message) where success indicates if the reset
-            was performed, and message provides details or error information.
+            Tuple where the first element is `True` if the reset succeeded, `False` otherwise; the second element is a human-readable message describing the result.
         """
         ...
 
@@ -184,10 +195,11 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def is_autostart_enabled(self) -> bool:
-        """Check if auto-start on login is enabled.
-
+        """
+        Check whether the application is configured to start automatically on user login.
+        
         Returns:
-            True if the app will start automatically on login.
+            `True` if the application will start automatically on login, `False` otherwise.
         """
         ...
 
@@ -215,9 +227,10 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def get_tray_icon_size(self) -> tuple[int, int]:
-        """Get the appropriate system tray icon size for this platform.
-
+        """
+        Determine the ideal system tray icon size for the current platform.
+        
         Returns:
-            Tuple of (width, height) for the icon.
+            (width, height) — Icon dimensions in pixels suitable for the platform.
         """
         ...

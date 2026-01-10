@@ -157,7 +157,11 @@ class TestLinuxPaths:
     """Tests for Linux-specific paths (with mocks for cross-platform testing)."""
 
     def test_linux_data_dir_uses_xdg(self):
-        """Test Linux platform respects XDG_DATA_HOME."""
+        """
+        Verify that LinuxPlatform identifies as the Linux platform.
+        
+        Asserts that an instantiated LinuxPlatform has its `name` attribute equal to "linux".
+        """
         from core.platform.linux import LinuxPlatform
 
         platform = LinuxPlatform()
@@ -345,7 +349,9 @@ class TestTrayIconSize:
         assert platform.get_tray_icon_size() == (32, 32)
 
     def test_linux_icon_size_is_32x32(self):
-        """Test Linux uses 32x32 for system tray."""
+        """
+        Verifies the Linux platform reports a tray icon size of (32, 32).
+        """
         from core.platform.linux import LinuxPlatform
 
         platform = LinuxPlatform()
@@ -384,7 +390,11 @@ class TestBackwardsCompatibility:
     """Tests for backwards compatibility with existing code."""
 
     def test_core_config_platform_variable(self):
-        """Test that core.config.PLATFORM still works."""
+        """
+        Verify that core.config.PLATFORM is one of the supported platform identifiers.
+        
+        Ensures the module-level PLATFORM value in core.config equals "macos", "windows", or "linux".
+        """
         from core.config import PLATFORM
 
         assert PLATFORM in ("macos", "windows", "linux")

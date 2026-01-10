@@ -30,7 +30,12 @@ class LinuxPlatform(PlatformBase):
 
     @property
     def name(self) -> Literal["macos", "windows", "linux"]:
-        """Return the platform identifier."""
+        """
+        Identify the platform as Linux.
+        
+        Returns:
+            The literal string 'linux' identifying this platform implementation.
+        """
         return "linux"
 
     # -------------------------------------------------------------------------
@@ -38,10 +43,11 @@ class LinuxPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def get_data_dir(self) -> Path:
-        """Get Linux application data directory following XDG Base Directory spec.
-
+        """
+        Determine the application data directory according to the XDG Base Directory specification.
+        
         Returns:
-            Path to $XDG_DATA_HOME/LiveRecall or ~/.local/share/LiveRecall
+            Path: The directory at $XDG_DATA_HOME/<APP_NAME> if XDG_DATA_HOME is set, otherwise ~/.local/share/<APP_NAME>. The directory is created if it does not already exist.
         """
         xdg_data_home = os.environ.get("XDG_DATA_HOME")
         base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
@@ -55,10 +61,11 @@ class LinuxPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def open_folder(self, path: Path) -> None:
-        """Open a folder using xdg-open.
-
-        Args:
-            path: Path to the folder to open.
+        """
+        Open the given folder in the user's default file manager.
+        
+        Parameters:
+            path (Path): Path to the folder to open.
         """
         try:
             subprocess.run(["xdg-open", str(path)], check=False)
@@ -72,44 +79,49 @@ class LinuxPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def needs_screen_permission(self) -> bool:
-        """Check if Linux requires screen recording permission.
-
-        On X11, screen recording generally works without permission.
-        On Wayland, it depends on the compositor and may require portal access.
-
+        """
+        Indicates whether the current Linux environment requires explicit screen recording permission.
+        
+        Currently always returns False; Wayland vs X11 detection is not implemented.
+        
         Returns:
-            False - we assume permission works and let capture fail if not.
+            `True` if the environment requires explicit screen recording permission, `False` otherwise.
         """
         # TODO: Detect Wayland vs X11 and handle accordingly
         return False
 
     def check_screen_permission(self) -> bool:
-        """Check if screen recording permission is granted.
-
+        """
+        Report whether screen recording permission is available.
+        
+        On this Linux implementation the check assumes permission is granted; capture operations may still fail if the environment denies access.
+        
         Returns:
-            True - assume granted, let capture fail if not.
+            bool: `True` if permission appears to be granted; this implementation always returns `True`.
         """
         # TODO: On Wayland, could check portal permissions
         return True
 
     def request_screen_permission(self) -> bool:
-        """Request screen recording permission.
-
-        On Wayland, this would involve the xdg-desktop-portal.
-
+        """
+        Request screen recording permission from the user.
+        
+        On Wayland this typically involves xdg-desktop-portal; currently this implementation is a stub and assumes permission is granted.
+        
         Returns:
-            True - request flow varies by desktop environment.
+            `True` if screen recording permission is granted, `False` otherwise.
         """
         # TODO: Implement Wayland portal request if needed
         return True
 
     def reset_screen_permission(self) -> tuple[bool, str]:
-        """Reset screen recording permission.
-
-        Linux doesn't have a centralized permission system like macOS TCC.
-
+        """
+        Indicates that no platform-level screen-permission reset is performed on Linux.
+        
+        Linux does not provide a single, system-wide screen-recording permission to reset; behavior depends on the desktop environment.
+        
         Returns:
-            Tuple indicating no action needed.
+            (True, str): A tuple where `True` indicates no reset was performed and the string explains that permissions vary by desktop environment.
         """
         return True, "No permission reset needed on Linux. Screen capture permissions vary by desktop environment."
 
@@ -118,21 +130,23 @@ class LinuxPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def is_autostart_enabled(self) -> bool:
-        """Check if auto-start is enabled via XDG autostart.
-
+        """
+        Determine whether the application is configured to auto-start via XDG autostart.
+        
         Returns:
-            True if the desktop file exists in ~/.config/autostart
+            True if the autostart desktop file exists in the user's ~/.config/autostart directory, False otherwise.
         """
         desktop_file = _AUTOSTART_DIR / _DESKTOP_FILE_NAME
         return desktop_file.exists()
 
     def enable_autostart(self) -> bool:
-        """Enable auto-start via XDG autostart desktop file.
-
-        Creates a .desktop file in ~/.config/autostart/
-
+        """
+        Enable application autostart by creating an XDG autostart `.desktop` file.
+        
+        Creates or overwrites a `.desktop` file in the user's `~/.config/autostart` directory so the application launches on login. If the executable path cannot be determined (for example, in development mode), no file is written.
+        
         Returns:
-            True if successfully enabled, False otherwise.
+            `True` if the autostart file was created, `False` otherwise.
         """
         exe_path = get_executable_path()
         if exe_path is None:
@@ -183,11 +197,10 @@ StartupWMClass={APP_NAME}
     # -------------------------------------------------------------------------
 
     def get_tray_icon_size(self) -> tuple[int, int]:
-        """Get Linux system tray icon size.
-
-        Most Linux desktop environments use 32x32 for system tray icons.
-
+        """
+        Provide the recommended system tray icon size for Linux desktop environments.
+        
         Returns:
-            (32, 32) for Linux system tray.
+            A tuple `(width, height)` in pixels; typically `(32, 32)`.
         """
         return (32, 32)

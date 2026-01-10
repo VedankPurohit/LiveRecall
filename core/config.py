@@ -16,33 +16,41 @@ PLATFORM: Literal["macos", "windows", "linux"] = current_platform.name
 
 
 def get_data_dir() -> Path:
-    """Get platform-specific data directory.
-
-    Delegates to the platform abstraction layer.
+    """
+    Return the application data directory for the current platform.
+    
+    Returns:
+        Path: Path to the data directory used by the application on the current platform.
     """
     return current_platform.get_data_dir()
 
 
 def get_screenshots_dir() -> Path:
-    """Get screenshots storage directory.
-
-    Delegates to the platform abstraction layer.
+    """
+    Get the path to the screenshots storage directory for the current platform.
+    
+    Returns:
+        Path: The screenshots directory as a pathlib.Path.
     """
     return current_platform.get_screenshots_dir()
 
 
 def get_database_path() -> Path:
-    """Get database file path.
-
-    Delegates to the platform abstraction layer.
+    """
+    Get the platform-specific path to the application's database file.
+    
+    Returns:
+        Path: The filesystem path to the database file for the current platform.
     """
     return current_platform.get_database_path()
 
 
 def get_config_path() -> Path:
-    """Get config file path.
-
-    Delegates to the platform abstraction layer.
+    """
+    Get the platform-specific path to the configuration file.
+    
+    Returns:
+        Path: Path to the JSON configuration file for the current platform.
     """
     return current_platform.get_config_path()
 

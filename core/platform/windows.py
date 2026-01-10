@@ -36,7 +36,12 @@ class WindowsPlatform(PlatformBase):
 
     @property
     def name(self) -> Literal["macos", "windows", "linux"]:
-        """Return the platform identifier."""
+        """
+        Platform identifier for this implementation.
+        
+        Returns:
+            'windows': The platform identifier string literal for Windows.
+        """
         return "windows"
 
     # -------------------------------------------------------------------------
@@ -44,10 +49,13 @@ class WindowsPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def get_data_dir(self) -> Path:
-        """Get Windows application data directory.
-
+        """
+        Return the application's data directory within the user's roaming AppData.
+        
+        Ensures the directory exists before returning it.
+        
         Returns:
-            Path to %APPDATA%/LiveRecall (typically C:/Users/<user>/AppData/Roaming/LiveRecall)
+            Path to the application's data directory (e.g., %APPDATA%\\LiveRecall or C:/Users/<user>/AppData/Roaming/LiveRecall)
         """
         # Use APPDATA environment variable, fall back to standard location
         appdata = os.environ.get("APPDATA")
@@ -62,10 +70,11 @@ class WindowsPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def open_folder(self, path: Path) -> None:
-        """Open a folder in Windows Explorer.
-
-        Args:
-            path: Path to the folder to open.
+        """
+        Open the given directory in Windows Explorer.
+        
+        Parameters:
+            path (Path): Directory path to open in Explorer.
         """
         try:
             # Use explorer.exe to open the folder
@@ -78,40 +87,40 @@ class WindowsPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def needs_screen_permission(self) -> bool:
-        """Windows does not require explicit screen recording permission.
-
+        """
+        Indicates whether the current platform requires explicit screen-recording permission.
+        
         Returns:
-            False - Windows grants screen capture automatically.
+            `True` if screen recording permission is considered granted on this platform, `False` otherwise.
         """
         return False
 
     def check_screen_permission(self) -> bool:
-        """Check if screen recording permission is granted.
-
-        Windows always grants this permission.
-
+        """
+        Indicates whether screen recording permission is granted on Windows.
+        
         Returns:
-            True - always granted on Windows.
+            True indicating screen recording permission is considered granted on Windows.
         """
         return True
 
     def request_screen_permission(self) -> bool:
-        """Request screen recording permission.
-
-        No-op on Windows as permission is automatically granted.
-
+        """
+        No-op that confirms screen recording permission is available on Windows.
+        
         Returns:
-            True - no request needed.
+            True if permission is available and no request was performed.
         """
         return True
 
     def reset_screen_permission(self) -> tuple[bool, str]:
-        """Reset screen recording permission.
-
-        No-op on Windows as there's no permission to reset.
-
+        """
+        Reset screen recording permission.
+        
+        No operation on Windows because screen capture permission is managed by the system and cannot be reset by the application.
+        
         Returns:
-            Tuple of (True, message) indicating no action needed.
+            tuple[bool, str]: A pair where the first element is `True` indicating no action was required, and the second element is a human-readable message explaining the outcome.
         """
         return True, "No permission reset needed on Windows. Screen capture works automatically."
 
@@ -172,10 +181,11 @@ class WindowsPlatform(PlatformBase):
             return False
 
     def disable_autostart(self) -> bool:
-        """Disable auto-start by removing the Registry entry.
-
+        """
+        Remove the application's autostart entry from the current user's Windows Run registry key.
+        
         Returns:
-            True if successfully disabled, False otherwise.
+            True if the autostart entry was removed or did not exist, False on error or when the Windows registry API is unavailable.
         """
         if _winreg is None:
             logger.warning("winreg module not available (not on Windows)")
@@ -202,11 +212,10 @@ class WindowsPlatform(PlatformBase):
     # -------------------------------------------------------------------------
 
     def get_tray_icon_size(self) -> tuple[int, int]:
-        """Get Windows system tray icon size.
-
-        Windows system tray typically uses 32x32 icons.
-
+        """
+        Provide the standard Windows system tray icon size.
+        
         Returns:
-            (32, 32) for Windows system tray.
+            tuple[int, int]: Width and height in pixels (32, 32).
         """
         return (32, 32)

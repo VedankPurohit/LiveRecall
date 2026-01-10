@@ -249,7 +249,15 @@ def build_pyinstaller(use_uv: bool):
 
 
 def create_dmg(app_path: Path) -> Path:
-    """Create macOS DMG installer with Applications symlink"""
+    """
+    Create a macOS DMG installer containing the specified .app bundle and an "Applications" symlink for drag-and-drop installation.
+    
+    Parameters:
+        app_path (Path): Path to the built `.app` bundle to include in the DMG.
+    
+    Returns:
+        dmg_path (Path): Path to the created DMG file in the `dist/` directory.
+    """
     print_step("Creating DMG installer")
 
     arch = platform.machine()
@@ -296,7 +304,17 @@ def create_dmg(app_path: Path) -> Path:
 
 
 def create_windows_zip(exe_path: Path) -> Path:
-    """Create Windows portable ZIP archive"""
+    """
+    Create a Windows ZIP archive containing the built executable or PyInstaller output directory.
+    
+    The archive is written to dist/ and named "{APP_NAME}-{VERSION}-Windows-{arch}.zip", where common machine identifiers "AMD64" and "x86_64" are mapped to "x64". If exe_path is a file it is added as a single entry; if it is a directory its files are added preserving paths relative to exe_path.parent.
+    
+    Parameters:
+        exe_path (Path): Path to the built executable file or the PyInstaller output directory to include in the ZIP.
+    
+    Returns:
+        Path: Path to the created ZIP archive.
+    """
     import zipfile
 
     print_step("Creating Windows ZIP archive")
@@ -326,7 +344,17 @@ def create_windows_zip(exe_path: Path) -> Path:
 
 
 def create_windows_installer(exe_path: Path) -> Path | None:
-    """Create Windows installer using NSIS (if available)"""
+    """
+    Create a Windows installer executable using NSIS.
+    
+    Uses the NSIS `makensis` tool to compile the installer script at installer/windows.nsi, passing the provided build artifact path into the script. If NSIS is not installed, the NSIS script is missing, or the build fails, the function skips creation and returns `None`.
+    
+    Parameters:
+        exe_path (Path): Path to the built application executable (or the dist folder) to be embedded or referenced by the NSIS script.
+    
+    Returns:
+        Path | None: Path to the created installer .exe on success, or `None` if installer creation was skipped or failed.
+    """
     print_step("Creating Windows installer")
 
     nsis_available = shutil.which("makensis")
@@ -368,6 +396,11 @@ def create_windows_installer(exe_path: Path) -> Path | None:
 # Main
 # ============================================================================
 def main():
+    """
+    Orchestrates the full LiveRecall release build, producing platform-specific distributables.
+    
+    Parses CLI flags (--skip-web, --skip-dmg, --skip-installer, --skip-zip), verifies prerequisites, installs dependencies, builds the web UI (unless skipped), generates icons, runs PyInstaller to produce the application artifact, and then creates platform packages (DMG on macOS unless skipped; ZIP and optional NSIS installer on Windows). On failure the process exits with a non-zero status.
+    """
     parser = argparse.ArgumentParser(
         description="Build LiveRecall distributable package",
         formatter_class=argparse.RawDescriptionHelpFormatter,
