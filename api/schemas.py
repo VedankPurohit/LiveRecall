@@ -44,6 +44,14 @@ class SimilarityMetric(str, Enum):
     DISTANCE = "distance"
 
 
+class VisibilityFilter(str, Enum):
+    """Visibility filter for screenshots"""
+
+    VISIBLE_ONLY = "visible_only"
+    HIDDEN_ONLY = "hidden_only"
+    ALL = "all"
+
+
 # =============================================================================
 # Recording
 # =============================================================================
@@ -168,6 +176,7 @@ class SearchRequest(BaseModel):
     negative_weight: float = Field(default=1.0, ge=0.0, le=3.0)
     start_date: str | None = Field(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)")
     end_date: str | None = Field(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)")
+    visibility: VisibilityFilter = Field(default=VisibilityFilter.VISIBLE_ONLY, description="Filter by visibility")
 
     class Config:
         json_schema_extra = {
@@ -178,6 +187,7 @@ class SearchRequest(BaseModel):
                 "safe_mode_level": "mid",
                 "start_date": "251201000000",
                 "end_date": "251206235959",
+                "visibility": "visible_only",
             }
         }
 
@@ -223,6 +233,7 @@ class Screenshot(BaseModel):
     image_path: str
     timestamp: str
     has_embedding: bool
+    is_hidden: bool = False
     created_at: str | None = None
 
     class Config:
@@ -232,6 +243,7 @@ class Screenshot(BaseModel):
                 "image_path": "/path/to/screenshot.jpg",
                 "timestamp": "251206143022",
                 "has_embedding": True,
+                "is_hidden": False,
                 "created_at": "2025-12-06 14:30:22",
             }
         }
@@ -279,6 +291,53 @@ class ScreenshotDeleteResponse(BaseModel):
 
 
 # =============================================================================
+# Bulk Operations
+# =============================================================================
+
+
+class BulkOperationRequest(BaseModel):
+    """Request for bulk screenshot operations"""
+
+    screenshot_ids: list[int] = Field(..., min_length=1, max_length=1000)
+
+
+class BulkOperationResponse(BaseModel):
+    """Response for bulk screenshot operations"""
+
+    success: bool
+    affected_count: int
+    message: str
+
+
+# =============================================================================
+# Incognito Mode
+# =============================================================================
+
+
+class IncognitoStatus(BaseModel):
+    """Incognito mode status"""
+
+    active: bool
+    remaining_seconds: int
+    until_timestamp: float | None = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "active": True,
+                "remaining_seconds": 847,
+                "until_timestamp": 1704567890.123,
+            }
+        }
+
+
+class IncognitoSetRequest(BaseModel):
+    """Request to set incognito mode"""
+
+    duration_minutes: int = Field(..., ge=0, le=120, description="0 to disable, or 5/15/30/60 minutes")
+
+
+# =============================================================================
 # Status / Health
 # =============================================================================
 
@@ -309,6 +368,7 @@ class SystemStatus(BaseModel):
     recording: RecordingStatus
     database: DatabaseStats
     model: ModelStatus
+    incognito: IncognitoStatus
     data_directory: str
 
     class Config:
@@ -319,6 +379,7 @@ class SystemStatus(BaseModel):
                 "recording": {"is_recording": False, "mode": "normal", "interval": 2.0, "threshold": 0.9},
                 "database": {"total_screenshots": 1247, "synced": 1200, "unsynced": 47},
                 "model": {"loaded": False, "device": None, "idle_seconds": 0, "auto_unload_seconds": 300},
+                "incognito": {"active": False, "remaining_seconds": 0, "until_timestamp": None},
                 "data_directory": "~/Library/Application Support/LiveRecall",
             }
         }

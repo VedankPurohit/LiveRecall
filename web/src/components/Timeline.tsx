@@ -1,12 +1,16 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, CheckSquare } from 'lucide-react';
 import type { Screenshot } from '@/types';
 
 interface TimelineProps {
   screenshots: Screenshot[];
   getImageUrl: (path: string) => string;
+  // Selection props (optional for backwards compatibility)
+  isSelected?: (id: number) => boolean;
+  onToggleSelection?: (id: number, index: number, shiftKey: boolean) => void;
+  selectionEnabled?: boolean;
 }
 
 interface DayGroup {
@@ -37,7 +41,13 @@ function formatTime(timestamp: string): string {
   });
 }
 
-export function Timeline({ screenshots, getImageUrl }: TimelineProps) {
+export function Timeline({
+  screenshots,
+  getImageUrl,
+  isSelected,
+  onToggleSelection,
+  selectionEnabled = false,
+}: TimelineProps) {
   const [selectedImage, setSelectedImage] = useState<Screenshot | null>(null);
 
   // Keyboard navigation for lightbox
@@ -116,28 +126,53 @@ export function Timeline({ screenshots, getImageUrl }: TimelineProps) {
 
           {/* Horizontal scroll strip */}
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-8 px-8 scrollbar-hide">
-            {group.screenshots.map((screenshot) => (
-              <div
-                key={screenshot.id}
-                onClick={() => setSelectedImage(screenshot)}
-                className="flex-shrink-0 cursor-pointer group"
-              >
-                <div className="relative rounded-xl overflow-hidden bg-[#1c1c1e] transition-transform hover:scale-[1.02]">
-                  <img
-                    src={getImageUrl(screenshot.image_path)}
-                    alt=""
-                    className="h-36 w-auto object-cover"
-                    loading="lazy"
-                  />
-                  {/* Time overlay */}
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                    <span className="text-xs text-white/90 font-medium">
-                      {formatTime(screenshot.timestamp)}
-                    </span>
+            {group.screenshots.map((screenshot, idx) => {
+              const globalIndex = screenshots.findIndex(s => s.id === screenshot.id);
+              const selected = selectionEnabled && isSelected?.(screenshot.id);
+
+              return (
+                <div
+                  key={screenshot.id}
+                  onClick={(e) => {
+                    if (selectionEnabled && onToggleSelection) {
+                      onToggleSelection(screenshot.id, globalIndex, e.shiftKey);
+                    } else {
+                      setSelectedImage(screenshot);
+                    }
+                  }}
+                  className="flex-shrink-0 cursor-pointer group"
+                >
+                  <div className={`relative rounded-xl overflow-hidden bg-[#1c1c1e] transition-transform hover:scale-[1.02] ${
+                    selected ? 'ring-2 ring-[#86efac]' : ''
+                  }`}>
+                    <img
+                      src={getImageUrl(screenshot.image_path)}
+                      alt=""
+                      className="h-36 w-auto object-cover"
+                      loading="lazy"
+                    />
+                    {/* Selection indicator */}
+                    {selected && (
+                      <div className="absolute top-2 left-2">
+                        <CheckSquare className="w-5 h-5 text-[#86efac] drop-shadow-md" />
+                      </div>
+                    )}
+                    {/* Hidden indicator */}
+                    {screenshot.is_hidden && (
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-500/80 rounded text-[10px] text-white font-medium">
+                        Hidden
+                      </div>
+                    )}
+                    {/* Time overlay */}
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                      <span className="text-xs text-white/90 font-medium">
+                        {formatTime(screenshot.timestamp)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}

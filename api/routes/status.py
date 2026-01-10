@@ -12,6 +12,7 @@ from api.schemas import (
     CompressionConfig,
     ConfigUpdateRequest,
     DatabaseStats,
+    IncognitoStatus,
     ModelStatus,
     RecordingStatus,
     SafeModeLevel,
@@ -64,12 +65,21 @@ async def get_system_status():
         auto_unload_seconds=model_status["auto_unload_seconds"],
     )
 
+    # Incognito status
+    is_incognito_active = config.is_incognito_mode()
+    incognito = IncognitoStatus(
+        active=is_incognito_active,
+        remaining_seconds=config.get_incognito_remaining_seconds(),
+        until_timestamp=config.incognito.until if is_incognito_active else None,
+    )
+
     return SystemStatus(
         healthy=True,
         version=VERSION,
         recording=recording,
         database=database,
         model=model,
+        incognito=incognito,
         data_directory=str(config.data_dir),
     )
 

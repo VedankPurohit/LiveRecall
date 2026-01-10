@@ -85,6 +85,9 @@ class Database:
             # Migration: add compression columns if they don't exist
             self._migrate_compression_columns(cur)
 
+            # Migration: add is_hidden column if it doesn't exist
+            self._migrate_hidden_column(cur)
+
             # Index for faster queries
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_screenshots_timestamp
@@ -99,6 +102,11 @@ class Database:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_screenshots_is_compressed
                 ON screenshots(is_compressed)
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_screenshots_is_hidden
+                ON screenshots(is_hidden)
             """)
 
             # Virtual table for vector search
@@ -125,17 +133,31 @@ class Database:
         if "compressed_at" not in columns:
             cur.execute("ALTER TABLE screenshots ADD COLUMN compressed_at TEXT")
 
+    def _migrate_hidden_column(self, cur):
+        """Add is_hidden column to existing databases"""
+        cur.execute("PRAGMA table_info(screenshots)")
+        columns = {row[1] for row in cur.fetchall()}
+
+        if "is_hidden" not in columns:
+            cur.execute("ALTER TABLE screenshots ADD COLUMN is_hidden INTEGER DEFAULT 0")
+
     # --- Screenshot CRUD ---
 
-    def add_screenshot(self, image_path: str, timestamp: str | None = None) -> int:
-        """Add a new screenshot (without embedding)"""
+    def add_screenshot(self, image_path: str, timestamp: str | None = None, is_hidden: bool = False) -> int:
+        """Add a new screenshot (without embedding)
+
+        Args:
+            image_path: Path to the screenshot image
+            timestamp: Timestamp in YYMMDDHHMMSS format (auto-generated if None)
+            is_hidden: Whether the screenshot should be hidden (for incognito mode)
+        """
         if timestamp is None:
             timestamp = time.strftime("%y%m%d%H%M%S")
 
         with self.cursor() as cur:
             cur.execute(
-                "INSERT INTO screenshots (image_path, timestamp, has_embedding) VALUES (?, ?, 0)",
-                (image_path, timestamp),
+                "INSERT INTO screenshots (image_path, timestamp, has_embedding, is_hidden) VALUES (?, ?, 0, ?)",
+                (image_path, timestamp, 1 if is_hidden else 0),
             )
             return cur.lastrowid
 
@@ -162,20 +184,90 @@ class Database:
             cur.execute("DELETE FROM screenshots WHERE id = ?", (screenshot_id,))
             return cur.rowcount > 0
 
+    def delete_screenshots_bulk(self, screenshot_ids: list[int]) -> list[str]:
+        """Delete multiple screenshots and their embeddings.
+
+        Args:
+            screenshot_ids: List of screenshot IDs to delete
+
+        Returns:
+            List of image paths that were deleted (for file cleanup)
+        """
+        if not screenshot_ids:
+            return []
+
+        with self.cursor() as cur:
+            placeholders = ",".join("?" * len(screenshot_ids))
+
+            # Get paths first for file cleanup
+            cur.execute(
+                f"SELECT image_path FROM screenshots WHERE id IN ({placeholders})",
+                screenshot_ids,
+            )
+            paths = [row[0] for row in cur.fetchall()]
+
+            # Delete embeddings first (foreign key relationship)
+            cur.execute(
+                f"DELETE FROM screenshot_embeddings WHERE screenshot_id IN ({placeholders})",
+                screenshot_ids,
+            )
+
+            # Delete screenshots
+            cur.execute(
+                f"DELETE FROM screenshots WHERE id IN ({placeholders})",
+                screenshot_ids,
+            )
+
+            return paths
+
+    def set_screenshots_hidden(self, screenshot_ids: list[int], is_hidden: bool) -> int:
+        """Set the hidden status of multiple screenshots.
+
+        Args:
+            screenshot_ids: List of screenshot IDs to update
+            is_hidden: Whether to hide (True) or unhide (False)
+
+        Returns:
+            Number of rows affected
+        """
+        if not screenshot_ids:
+            return 0
+
+        with self.cursor() as cur:
+            placeholders = ",".join("?" * len(screenshot_ids))
+            cur.execute(
+                f"UPDATE screenshots SET is_hidden = ? WHERE id IN ({placeholders})",
+                [1 if is_hidden else 0] + screenshot_ids,
+            )
+            return cur.rowcount
+
     def get_all_screenshots(
-        self, limit: int | None = None, offset: int = 0, start_date: str | None = None, end_date: str | None = None
+        self,
+        limit: int | None = None,
+        offset: int = 0,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        visibility: str = "visible_only",
     ) -> list[dict]:
-        """Get all screenshots with pagination and optional date filtering.
+        """Get all screenshots with pagination, date filtering, and visibility filter.
 
         Args:
             limit: Max results to return
             offset: Number of results to skip
             start_date: Filter screenshots after this timestamp (YYMMDDHHMMSS format)
             end_date: Filter screenshots before this timestamp (YYMMDDHHMMSS format)
+            visibility: One of "visible_only", "hidden_only", or "all"
         """
         with self.cursor() as cur:
             conditions: list[str] = []
             params: list[str | int] = []
+
+            # Visibility filter
+            if visibility == "visible_only":
+                conditions.append("(is_hidden = 0 OR is_hidden IS NULL)")
+            elif visibility == "hidden_only":
+                conditions.append("is_hidden = 1")
+            # "all" - no visibility condition
 
             if start_date:
                 conditions.append("timestamp >= ?")
@@ -187,19 +279,73 @@ class Database:
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             if limit:
-                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?"
                 params.extend([limit, offset])
             else:
-                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC"
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC, id DESC"
 
             cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
-    def get_screenshots_count(self, start_date: str | None = None, end_date: str | None = None) -> int:
-        """Get count of screenshots with optional date filtering."""
+    def get_screenshot_offset(
+        self,
+        screenshot_id: int,
+        visibility: str = "visible_only",
+    ) -> int | None:
+        """Get the offset/position of a screenshot in the sorted list (timestamp DESC, id DESC).
+
+        Returns the number of screenshots that come before this one in the sorted order.
+        Returns None if screenshot not found.
+
+        Args:
+            screenshot_id: The ID of the screenshot
+            visibility: One of "visible_only", "hidden_only", or "all"
+        """
+        with self.cursor() as cur:
+            # First get the target screenshot's timestamp and id
+            cur.execute("SELECT timestamp, id FROM screenshots WHERE id = ?", [screenshot_id])
+            row = cur.fetchone()
+            if not row:
+                return None
+            target_ts = row[0]
+            target_id = row[1]
+
+            # Count screenshots that come BEFORE this one in ORDER BY timestamp DESC, id DESC
+            # A screenshot comes before if:
+            # - timestamp > target_ts, OR
+            # - timestamp = target_ts AND id > target_id
+            vis_condition = ""
+            if visibility == "visible_only":
+                vis_condition = "AND (is_hidden = 0 OR is_hidden IS NULL)"
+            elif visibility == "hidden_only":
+                vis_condition = "AND is_hidden = 1"
+            # "all" - no visibility condition
+
+            query = f"""
+                SELECT COUNT(*) FROM screenshots
+                WHERE (timestamp > ? OR (timestamp = ? AND id > ?))
+                {vis_condition}
+            """
+            cur.execute(query, [target_ts, target_ts, target_id])
+            return cur.fetchone()[0]
+
+    def get_screenshots_count(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        visibility: str = "visible_only",
+    ) -> int:
+        """Get count of screenshots with optional date filtering and visibility filter."""
         with self.cursor() as cur:
             conditions = []
             params = []
+
+            # Visibility filter
+            if visibility == "visible_only":
+                conditions.append("(is_hidden = 0 OR is_hidden IS NULL)")
+            elif visibility == "hidden_only":
+                conditions.append("is_hidden = 1")
+            # "all" - no visibility condition
 
             if start_date:
                 conditions.append("timestamp >= ?")
@@ -212,23 +358,42 @@ class Database:
             cur.execute(f"SELECT COUNT(*) FROM screenshots {where_clause}", params)
             return cur.fetchone()[0]
 
-    def get_date_range(self) -> dict:
+    def get_date_range(self, visibility: str = "visible_only") -> dict:
         """Get the min and max timestamps in the database."""
         with self.cursor() as cur:
-            cur.execute("SELECT MIN(timestamp), MAX(timestamp) FROM screenshots")
+            if visibility == "visible_only":
+                where = "WHERE (is_hidden = 0 OR is_hidden IS NULL)"
+            elif visibility == "hidden_only":
+                where = "WHERE is_hidden = 1"
+            else:
+                where = ""
+
+            cur.execute(f"SELECT MIN(timestamp), MAX(timestamp) FROM screenshots {where}")
             row = cur.fetchone()
             return {"min_date": row[0], "max_date": row[1]}
 
-    def get_density_data(self, buckets: int = 100) -> list[dict]:
+    def get_density_data(self, buckets: int = 100, visibility: str = "visible_only") -> list[dict]:
         """Get screenshot count per time bucket for timeline density visualization.
+
+        Args:
+            buckets: Number of time buckets to divide the range into
+            visibility: One of "visible_only", "hidden_only", or "all"
 
         Returns a list of buckets with start timestamp, end timestamp, and count.
         """
         from datetime import datetime, timedelta
 
+        # Build visibility condition
+        if visibility == "visible_only":
+            vis_condition = "(is_hidden = 0 OR is_hidden IS NULL)"
+        elif visibility == "hidden_only":
+            vis_condition = "is_hidden = 1"
+        else:
+            vis_condition = "1=1"
+
         with self.cursor() as cur:
             # Get date range
-            cur.execute("SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM screenshots")
+            cur.execute(f"SELECT MIN(timestamp), MAX(timestamp), COUNT(*) FROM screenshots WHERE {vis_condition}")
             row = cur.fetchone()
             min_ts, max_ts, total = row[0], row[1], row[2]
 
@@ -269,7 +434,8 @@ class Database:
                 end_ts = format_ts(bucket_end_dt)
 
                 cur.execute(
-                    "SELECT COUNT(*) FROM screenshots WHERE timestamp >= ? AND timestamp < ?", (start_ts, end_ts)
+                    f"SELECT COUNT(*) FROM screenshots WHERE {vis_condition} AND timestamp >= ? AND timestamp < ?",
+                    (start_ts, end_ts),
                 )
                 count = cur.fetchone()[0]
 
@@ -317,6 +483,7 @@ class Database:
         limit: int = 10,
         min_similarity: float = 0.0,
         similarity_metric: str = "cosine",
+        visibility: str = "visible_only",
     ) -> list[dict]:
         """Search for similar screenshots using vector similarity
 
@@ -325,16 +492,26 @@ class Database:
             limit: Maximum number of results
             min_similarity: Minimum similarity threshold
             similarity_metric: "cosine" for cosine similarity or "distance" for 1/(1+L2)
+            visibility: One of "visible_only", "hidden_only", or "all"
         """
         if len(query_embedding) != EMBEDDING_DIM:
             raise ValueError(f"Query embedding must be {EMBEDDING_DIM} dimensions")
 
         query_bytes = serialize_embedding(query_embedding)
 
+        # Build visibility condition
+        if visibility == "visible_only":
+            vis_condition = "AND (s.is_hidden = 0 OR s.is_hidden IS NULL)"
+        elif visibility == "hidden_only":
+            vis_condition = "AND s.is_hidden = 1"
+        else:
+            vis_condition = ""
+
         with self.cursor() as cur:
             # sqlite-vec uses L2 distance, lower is more similar
+            # Note: We fetch more than limit to account for visibility filtering
             cur.execute(
-                """
+                f"""
                 SELECT
                     s.*,
                     e.distance as vec_distance
@@ -342,9 +519,10 @@ class Database:
                 JOIN screenshots s ON s.id = e.screenshot_id
                 WHERE e.embedding MATCH ?
                     AND k = ?
+                    {vis_condition}
                 ORDER BY e.distance ASC
             """,
-                (query_bytes, limit),
+                (query_bytes, limit * 2 if visibility != "all" else limit),
             )
 
             results = []
@@ -364,6 +542,8 @@ class Database:
                 result["similarity"] = similarity
                 if result["similarity"] >= min_similarity:
                     results.append(result)
+                    if len(results) >= limit:
+                        break
 
             return results
 

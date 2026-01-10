@@ -4,11 +4,14 @@ CRUD operations for screenshots
 """
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from api.schemas import (
+    BulkOperationRequest,
+    BulkOperationResponse,
     DateRange,
     DensityBucket,
     DensityResponse,
@@ -16,11 +19,18 @@ from api.schemas import (
     ScreenshotDeleteResponse,
     ScreenshotList,
     SuccessResponse,
+    VisibilityFilter,
 )
 from core.config import get_screenshots_dir
 from core.database import db
 
 router = APIRouter(prefix="/screenshots", tags=["Screenshots"])
+
+# Type alias for visibility query parameter (description only, default set via = in function)
+VisibilityQuery = Annotated[
+    VisibilityFilter,
+    Query(description="Filter by visibility"),
+]
 
 
 def db_row_to_screenshot(row: dict) -> Screenshot:
@@ -30,6 +40,7 @@ def db_row_to_screenshot(row: dict) -> Screenshot:
         image_path=row["image_path"],
         timestamp=row["timestamp"],
         has_embedding=bool(row["has_embedding"]),
+        is_hidden=bool(row.get("is_hidden", 0)),
         created_at=row.get("created_at"),
     )
 
@@ -42,6 +53,7 @@ async def list_screenshots(
     unsynced_only: bool = Query(default=False),
     start_date: str | None = Query(default=None, description="Filter after this timestamp (YYMMDDHHMMSS)"),
     end_date: str | None = Query(default=None, description="Filter before this timestamp (YYMMDDHHMMSS)"),
+    visibility: VisibilityQuery = VisibilityFilter.VISIBLE_ONLY,
 ):
     """
     List screenshots with pagination and optional date filtering.
@@ -52,6 +64,7 @@ async def list_screenshots(
     - unsynced_only: Only show screenshots without embeddings
     - start_date: Filter screenshots after this timestamp (YYMMDDHHMMSS format)
     - end_date: Filter screenshots before this timestamp (YYMMDDHHMMSS format)
+    - visibility: Filter by visibility (visible_only, hidden_only, all)
     """
     if synced_only and unsynced_only:
         raise HTTPException(
@@ -69,8 +82,13 @@ async def list_screenshots(
             offset=offset,
             start_date=start_date,
             end_date=end_date,
+            visibility=visibility.value,
         )
-        total = db.get_screenshots_count(start_date=start_date, end_date=end_date)
+        total = db.get_screenshots_count(
+            start_date=start_date,
+            end_date=end_date,
+            visibility=visibility.value,
+        )
         if synced_only:
             screenshots = [s for s in screenshots if s["has_embedding"]]
             # Note: This count is approximate when using synced_only with date filters
@@ -114,12 +132,14 @@ async def get_image_by_path(
 
 
 @router.get("/date-range", response_model=DateRange)
-async def get_date_range():
+async def get_date_range(
+    visibility: VisibilityQuery = VisibilityFilter.VISIBLE_ONLY,
+):
     """
     Get the min and max timestamps of all screenshots.
     Useful for initializing timeline bounds.
     """
-    date_range = db.get_date_range()
+    date_range = db.get_date_range(visibility=visibility.value)
     return DateRange(
         min_date=date_range["min_date"],
         max_date=date_range["max_date"],
@@ -129,6 +149,7 @@ async def get_date_range():
 @router.get("/density", response_model=DensityResponse)
 async def get_density(
     buckets: int = Query(default=100, ge=10, le=500, description="Number of time buckets"),
+    visibility: VisibilityQuery = VisibilityFilter.VISIBLE_ONLY,
 ):
     """
     Get screenshot density data for timeline visualization.
@@ -137,8 +158,9 @@ async def get_density(
     Used to render the density bar in the timeline scrubber.
 
     - buckets: Number of time buckets to divide the range into (10-500)
+    - visibility: Filter by visibility (visible_only, hidden_only, all)
     """
-    density_data = db.get_density_data(buckets=buckets)
+    density_data = db.get_density_data(buckets=buckets, visibility=visibility.value)
 
     if not density_data:
         return DensityResponse(
@@ -156,6 +178,85 @@ async def get_density(
         min_date=density_data[0]["start"] if density_data else None,
         max_date=density_data[-1]["end"] if density_data else None,
     )
+
+
+# =============================================================================
+# Bulk Operations (MUST come before dynamic /{screenshot_id} routes)
+# =============================================================================
+
+
+@router.delete("/bulk", response_model=BulkOperationResponse)
+async def delete_screenshots_bulk(
+    request: BulkOperationRequest,
+    delete_files: bool = Query(default=True, description="Also delete image files from disk"),
+):
+    """
+    Delete multiple screenshots at once.
+
+    - screenshot_ids: List of screenshot IDs to delete (1-1000)
+    - delete_files: Also delete image files from disk (default: true)
+    """
+    # Get paths and delete from database
+    paths = db.delete_screenshots_bulk(request.screenshot_ids)
+
+    # Delete files if requested
+    deleted_files = 0
+    if delete_files:
+        for path in paths:
+            image_path = Path(path)
+            if image_path.exists():
+                try:
+                    image_path.unlink()
+                    deleted_files += 1
+                except OSError:
+                    pass  # Ignore file deletion errors
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=len(paths),
+        message=f"Deleted {len(paths)} screenshots" + (f" and {deleted_files} files" if delete_files else ""),
+    )
+
+
+@router.post("/bulk/hide", response_model=BulkOperationResponse)
+async def hide_screenshots_bulk(request: BulkOperationRequest):
+    """
+    Hide multiple screenshots at once.
+
+    Hidden screenshots won't appear in normal views but can be restored later.
+
+    - screenshot_ids: List of screenshot IDs to hide (1-1000)
+    """
+    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=True)
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=count,
+        message=f"Hidden {count} screenshots",
+    )
+
+
+@router.post("/bulk/unhide", response_model=BulkOperationResponse)
+async def unhide_screenshots_bulk(request: BulkOperationRequest):
+    """
+    Unhide multiple screenshots at once.
+
+    Restores hidden screenshots to normal visibility.
+
+    - screenshot_ids: List of screenshot IDs to unhide (1-1000)
+    """
+    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=False)
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=count,
+        message=f"Unhidden {count} screenshots",
+    )
+
+
+# =============================================================================
+# Dynamic Routes (/{screenshot_id} - must come AFTER static routes like /bulk)
+# =============================================================================
 
 
 @router.get("/{screenshot_id}", response_model=Screenshot)
@@ -198,6 +299,27 @@ async def get_screenshot_image(
         media_type="image/jpeg",
         filename=image_path.name,
     )
+
+
+@router.get("/{screenshot_id}/offset")
+async def get_screenshot_offset(
+    screenshot_id: int,
+    visibility: VisibilityQuery = VisibilityFilter.VISIBLE_ONLY,
+):
+    """
+    Get the offset/position of a screenshot in the sorted list.
+
+    This endpoint returns the number of screenshots that appear before this one
+    in the timestamp-sorted list (newest first). Useful for navigating to a
+    specific screenshot in paginated views.
+
+    - screenshot_id: The ID of the screenshot
+    - visibility: Filter by visibility (visible_only, hidden_only, all)
+    """
+    offset = db.get_screenshot_offset(screenshot_id, visibility.value)
+    if offset is None:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    return {"offset": offset}
 
 
 @router.delete("/{screenshot_id}", response_model=SuccessResponse)

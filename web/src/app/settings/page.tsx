@@ -14,7 +14,17 @@ import {
   getCompressionStatus,
   getCompressionStats,
 } from '@/lib/api';
-import type { AppConfig, SystemStatus, SyncStatus, CompressionStatus, CompressionStats } from '@/types';
+import type { AppConfig, SystemStatus, SyncStatus, CompressionStatus, CompressionStats, VisibilityFilter } from '@/types';
+
+const STORAGE_KEYS = {
+  VISIBILITY_FILTER: 'liverecall_visibility_filter',
+};
+
+const VISIBILITY_OPTIONS: { value: VisibilityFilter; label: string; description: string }[] = [
+  { value: 'visible_only', label: 'Visible Only', description: 'Show only visible screenshots' },
+  { value: 'all', label: 'All', description: 'Show all screenshots including hidden' },
+  { value: 'hidden_only', label: 'Hidden Only', description: 'Show only hidden screenshots' },
+];
 
 const MODES = ['normal', 'games', 'fast', 'presentation', 'video', 'coding'];
 const SAFE_MODE_LEVELS = [
@@ -38,6 +48,20 @@ export default function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [compressionStatus, setCompressionStatus] = useState<CompressionStatus | null>(null);
   const [compressionStats, setCompressionStats] = useState<CompressionStats | null>(null);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('visible_only');
+
+  // Load visibility filter from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.VISIBILITY_FILTER);
+    if (saved) {
+      setVisibilityFilter(saved as VisibilityFilter);
+    }
+  }, []);
+
+  const handleVisibilityFilterChange = (value: VisibilityFilter) => {
+    setVisibilityFilter(value);
+    localStorage.setItem(STORAGE_KEYS.VISIBILITY_FILTER, value);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -256,6 +280,40 @@ export default function SettingsPage() {
                 ))}
               </select>
             </Row>
+          </Section>
+
+          {/* Privacy & Visibility */}
+          <Section title="Privacy & Visibility">
+            <div className="px-3 py-2">
+              <p className="text-xs text-[#555] mb-3">
+                Control which screenshots appear in Timeline, Search, and Gallery views.
+              </p>
+              <div className="space-y-2">
+                {VISIBILITY_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex items-start gap-3 p-2 rounded cursor-pointer transition-colors ${
+                      visibilityFilter === option.value
+                        ? 'bg-[#86efac]/10 border border-[#86efac]/30'
+                        : 'hover:bg-[#0f0f0f] border border-transparent'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="visibility"
+                      value={option.value}
+                      checked={visibilityFilter === option.value}
+                      onChange={() => handleVisibilityFilterChange(option.value)}
+                      className="mt-0.5 accent-[#86efac]"
+                    />
+                    <div>
+                      <span className="text-xs text-[#f5f5f5] font-medium">{option.label}</span>
+                      <p className="text-[10px] text-[#555] mt-0.5">{option.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
           </Section>
 
           {/* Storage */}

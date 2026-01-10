@@ -44,6 +44,14 @@ class TrayApp:
         api_client.set_capture_mode(mode)
         self._poll_status()
 
+    def _on_set_incognito(self, duration_minutes: int):
+        """Handle incognito mode toggle"""
+        if duration_minutes == 0:
+            api_client.stop_incognito_mode()
+        else:
+            api_client.set_incognito_mode(duration_minutes)
+        self._poll_status()
+
     def _on_quit(self):
         """Handle quit"""
         self._running = False
@@ -76,11 +84,11 @@ class TrayApp:
         self._update_menu()
 
     def _update_menu(self):
-        """Update menu based on current status"""
+        """Update menu and icon based on current status"""
         if self._icon is None or self._menu_builder is None:
             return
 
-        # Update menu (icon stays the same)
+        # Update menu
         self._menu_builder.update_status(self._status, self._update_info)
         self._icon.menu = self._menu_builder.build()
 
@@ -125,6 +133,7 @@ class TrayApp:
             on_toggle_recording=self._on_toggle_recording,
             on_sync=self._on_sync,
             on_set_mode=self._on_set_mode,
+            on_set_incognito=self._on_set_incognito,
             on_quit=self._on_quit,
             on_download_update=self._on_download_update,
         )

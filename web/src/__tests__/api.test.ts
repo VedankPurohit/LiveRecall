@@ -21,6 +21,7 @@ import {
   getCompressionStats,
   getScreenshots,
   getScreenshotById,
+  getScreenshotOffset,
   getDateRange,
   getDensity,
   deleteScreenshot,
@@ -28,6 +29,12 @@ import {
   getSetupStatus,
   resetPermissions,
   completeSetup,
+  bulkDeleteScreenshots,
+  bulkHideScreenshots,
+  bulkUnhideScreenshots,
+  getIncognitoStatus,
+  setIncognitoMode,
+  stopIncognitoMode,
 } from '@/lib/api';
 
 // Helper to mock fetch responses
@@ -147,6 +154,7 @@ describe('API Client', () => {
         safe_mode_level: 'low',
         start_date: '2024-01-01',
         end_date: '2024-12-31',
+        visibility: 'visible_only',
       });
     });
 
@@ -300,7 +308,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(data);
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots?limit=50&offset=0',
+        '/api/v1/screenshots?limit=50&offset=0&visibility=visible_only',
         expect.any(Object)
       );
     });
@@ -311,7 +319,7 @@ describe('API Client', () => {
       await getScreenshots(100, 50, '2024-01-01', '2024-12-31');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots?limit=100&offset=50&start_date=2024-01-01&end_date=2024-12-31',
+        '/api/v1/screenshots?limit=100&offset=50&visibility=visible_only&start_date=2024-01-01&end_date=2024-12-31',
         expect.any(Object)
       );
     });
@@ -363,7 +371,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(density);
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots/density?buckets=100',
+        '/api/v1/screenshots/density?buckets=100&visibility=visible_only',
         expect.any(Object)
       );
     });
@@ -374,7 +382,7 @@ describe('API Client', () => {
       await getDensity(50);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots/density?buckets=50',
+        '/api/v1/screenshots/density?buckets=50&visibility=visible_only',
         expect.any(Object)
       );
     });
@@ -453,6 +461,142 @@ describe('API Client', () => {
       expect(result).toEqual(response);
       expect(fetch).toHaveBeenCalledWith(
         '/api/v1/setup/complete',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+  });
+
+  describe('Screenshot Offset', () => {
+    it('should get screenshot offset with default visibility', async () => {
+      const offsetData = { offset: 42 };
+      mockFetch(offsetData);
+
+      const result = await getScreenshotOffset(123);
+
+      expect(result).toEqual(offsetData);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/screenshots/123/offset?visibility=visible_only',
+        expect.any(Object)
+      );
+    });
+
+    it('should get screenshot offset with custom visibility', async () => {
+      const offsetData = { offset: 10 };
+      mockFetch(offsetData);
+
+      const result = await getScreenshotOffset(456, 'hidden_only');
+
+      expect(result).toEqual(offsetData);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/screenshots/456/offset?visibility=hidden_only',
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('Bulk Operations', () => {
+    it('should bulk delete screenshots', async () => {
+      const response = {
+        success: true,
+        affected_count: 3,
+        message: 'Deleted 3 screenshots and 3 files',
+      };
+      mockFetch(response);
+
+      const result = await bulkDeleteScreenshots([1, 2, 3]);
+
+      expect(result).toEqual(response);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/screenshots/bulk',
+        expect.objectContaining({
+          method: 'DELETE',
+          body: JSON.stringify({ screenshot_ids: [1, 2, 3] }),
+        })
+      );
+    });
+
+    it('should bulk hide screenshots', async () => {
+      const response = {
+        success: true,
+        affected_count: 5,
+        message: 'Hidden 5 screenshots',
+      };
+      mockFetch(response);
+
+      const result = await bulkHideScreenshots([10, 20, 30, 40, 50]);
+
+      expect(result).toEqual(response);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/screenshots/bulk/hide',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ screenshot_ids: [10, 20, 30, 40, 50] }),
+        })
+      );
+    });
+
+    it('should bulk unhide screenshots', async () => {
+      const response = {
+        success: true,
+        affected_count: 2,
+        message: 'Unhidden 2 screenshots',
+      };
+      mockFetch(response);
+
+      const result = await bulkUnhideScreenshots([100, 200]);
+
+      expect(result).toEqual(response);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/screenshots/bulk/unhide',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ screenshot_ids: [100, 200] }),
+        })
+      );
+    });
+  });
+
+  describe('Incognito Mode', () => {
+    it('should get incognito status', async () => {
+      const status = {
+        is_active: true,
+        remaining_seconds: 1800,
+        started_at: '2024-01-15T10:00:00Z',
+      };
+      mockFetch(status);
+
+      const result = await getIncognitoStatus();
+
+      expect(result).toEqual(status);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/incognito/status',
+        expect.any(Object)
+      );
+    });
+
+    it('should set incognito mode with duration', async () => {
+      mockFetch({ success: true });
+
+      const result = await setIncognitoMode(30);
+
+      expect(result).toEqual({ success: true });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/incognito/set',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ duration_minutes: 30 }),
+        })
+      );
+    });
+
+    it('should stop incognito mode', async () => {
+      mockFetch({ success: true });
+
+      const result = await stopIncognitoMode();
+
+      expect(result).toEqual({ success: true });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/incognito/stop',
         expect.objectContaining({ method: 'POST' })
       );
     });
