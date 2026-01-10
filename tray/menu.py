@@ -4,6 +4,7 @@ Menu construction for system tray
 
 from __future__ import annotations
 
+import sys
 import webbrowser
 from collections.abc import Callable
 from typing import Any
@@ -15,6 +16,9 @@ from core.platform import current_platform
 
 from .api_client import SystemStatus
 from .config import CAPTURE_MODES, WEB_UI_URL
+
+# Windows has issues with default=True on menu items
+IS_WINDOWS = sys.platform == "win32"
 
 
 def open_data_folder():
@@ -120,15 +124,19 @@ class MenuBuilder:
 
         # Recording button: "Start" (green) when not recording, "Stop" (red) when recording
         # Note: pystray doesn't support colored text, but we use clear labels
-        recording_text = "■ Stop Recording" if status.is_recording else "▶ Start Recording"
+        # On Windows, avoid Unicode symbols that may not render correctly
+        if IS_WINDOWS:
+            recording_text = "Stop Recording" if status.is_recording else "Start Recording"
+        else:
+            recording_text = "■ Stop Recording" if status.is_recording else "▶ Start Recording"
 
         # Sync text with count
         if status.is_syncing:
-            sync_text = f"↻ Syncing... ({status.sync_progress}/{status.sync_total})"
+            sync_text = f"Syncing... ({status.sync_progress}/{status.sync_total})"
         elif status.unsynced > 0:
-            sync_text = f"↻ Sync ({status.unsynced} pending)"
+            sync_text = f"Sync ({status.unsynced} pending)"
         else:
-            sync_text = "↻ Sync (up to date)"
+            sync_text = "Sync (up to date)"
 
         # Stats
         snapshots_text = f"{status.total_screenshots:,} snapshots"
@@ -156,8 +164,9 @@ class MenuBuilder:
             incognito_label = "Incognito Mode"
 
         # Build menu items
+        # Note: default=True causes issues on Windows, so we only use it on macOS
         items = [
-            Item(recording_text, self.on_toggle_recording, default=True),
+            Item(recording_text, self.on_toggle_recording, default=not IS_WINDOWS),
             Item(incognito_label, Menu(*incognito_items)),
             Menu.SEPARATOR,
             Item(f"Mode: {status.recording_mode}", Menu(*mode_items)),
@@ -167,9 +176,9 @@ class MenuBuilder:
             Item(snapshots_text, None, enabled=False),
             Item(model_text, None, enabled=False),
             Menu.SEPARATOR,
-            Item("Search...", lambda: open_web_search()),
-            Item("Open Timeline", lambda: open_web_timeline()),
-            Item("Open Data Folder", lambda: open_data_folder()),
+            Item("Search...", open_web_search),
+            Item("Open Timeline", open_web_timeline),
+            Item("Open Data Folder", open_data_folder),
         ]
 
         # Add update notification if available

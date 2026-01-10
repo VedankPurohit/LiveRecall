@@ -2,6 +2,8 @@
 Main system tray application
 """
 
+import contextlib
+import sys
 import threading
 import time
 import webbrowser
@@ -15,6 +17,8 @@ from .backend import backend_manager
 from .config import STATUS_POLL_INTERVAL, WEB_UI_URL
 from .icons import get_app_icon
 from .menu import MenuBuilder
+
+IS_WINDOWS = sys.platform == "win32"
 
 
 class TrayApp:
@@ -91,6 +95,11 @@ class TrayApp:
         # Update menu
         self._menu_builder.update_status(self._status, self._update_info)
         self._icon.menu = self._menu_builder.build()
+
+        # On Windows, we need to explicitly call update_menu() to refresh
+        if IS_WINDOWS and hasattr(self._icon, "update_menu"):
+            with contextlib.suppress(Exception):
+                self._icon.update_menu()
 
     def _poll_loop(self):
         """Background polling loop"""
