@@ -107,6 +107,12 @@ export default function Home() {
     : snapshots;
   const selection = useSelection(currentViewItems);
 
+  // Clear selection when switching views to prevent stale selections
+  useEffect(() => {
+    selection.clearSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
+
   // Load preferences from localStorage
   useEffect(() => {
     const savedSafeMode = localStorage.getItem(STORAGE_KEYS.SAFE_MODE);
@@ -230,18 +236,21 @@ export default function Home() {
   }, [activeView, query, visibilityFilter]);
 
   // Load more gallery images for infinite scroll
+  // galleryOffset is the START of the loaded window, so next offset is galleryOffset + current count
   const loadMoreGallery = useCallback(async () => {
     if (isLoadingMore || !hasMoreGallery || query.trim()) return;
 
     setIsLoadingMore(true);
     try {
-      const newOffset = galleryOffset + GALLERY_PAGE_SIZE;
-      const data = await getScreenshots(GALLERY_PAGE_SIZE, newOffset, undefined, undefined, visibilityFilter);
+      // Calculate next offset based on start offset + current loaded count
+      const nextOffset = galleryOffset + gallerySnapshots.length;
+      const data = await getScreenshots(GALLERY_PAGE_SIZE, nextOffset, undefined, undefined, visibilityFilter);
 
       if (data?.screenshots?.length) {
         setGallerySnapshots(prev => [...prev, ...data.screenshots]);
-        setGalleryOffset(newOffset);
-        setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE && gallerySnapshots.length + data.screenshots.length < data.total);
+        // Don't update galleryOffset - it still represents the START of our window
+        const newTotal = galleryOffset + gallerySnapshots.length + data.screenshots.length;
+        setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE && newTotal < data.total);
       } else {
         setHasMoreGallery(false);
       }
@@ -264,9 +273,9 @@ export default function Home() {
       const loadCount = Math.min(GALLERY_PAGE_SIZE, galleryOffset);
       const newOffset = galleryOffset - loadCount;
 
-      // Capture scroll position before prepending
-      const container = gridContainerRef.current;
-      const scrollHeightBefore = container?.scrollHeight || 0;
+      // Store the ID of the first currently visible item for scroll restoration
+      // This is more reliable than tracking scrollHeight which can change if user scrolls during fetch
+      const firstVisibleId = gallerySnapshots[0]?.id;
 
       const data = await getScreenshots(loadCount, newOffset, undefined, undefined, visibilityFilter);
 
@@ -276,12 +285,13 @@ export default function Home() {
         setGalleryOffset(newOffset);
         setHasMoreGalleryBefore(newOffset > 0);
 
-        // Restore scroll position after prepending (compensate for new content)
-        if (container) {
+        // Restore scroll position by scrolling to the previously first visible item
+        if (firstVisibleId) {
           requestAnimationFrame(() => {
-            const scrollHeightAfter = container.scrollHeight;
-            const heightDiff = scrollHeightAfter - scrollHeightBefore;
-            container.scrollTop += heightDiff;
+            const element = document.getElementById(`grid-item-${firstVisibleId}`);
+            if (element) {
+              element.scrollIntoView({ block: 'start', behavior: 'instant' });
+            }
           });
         }
       } else {
@@ -292,15 +302,17 @@ export default function Home() {
     } finally {
       setIsLoadingMoreBefore(false);
     }
-  }, [isLoadingMoreBefore, hasMoreGalleryBefore, galleryOffset, visibilityFilter, query]);
+  }, [isLoadingMoreBefore, hasMoreGalleryBefore, galleryOffset, visibilityFilter, query, gallerySnapshots]);
 
   // Intersection observer for infinite scroll (load more at bottom)
+  // Note: We check isLoadingMore and call loadMoreGallery inside the callback,
+  // so we don't need them in dependencies. This prevents observer recreation on every load.
   useEffect(() => {
     if (activeView !== 'search' || query.trim()) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMoreGallery && !isLoadingMore) {
+        if (entries[0].isIntersecting) {
           loadMoreGallery();
         }
       },
@@ -312,7 +324,8 @@ export default function Home() {
     }
 
     return () => observer.disconnect();
-  }, [activeView, query, hasMoreGallery, isLoadingMore, loadMoreGallery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, query, hasMoreGallery]);
 
   // Intersection observer for bidirectional scroll (load more at top)
   useEffect(() => {
@@ -320,7 +333,7 @@ export default function Home() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMoreGalleryBefore && !isLoadingMoreBefore) {
+        if (entries[0].isIntersecting) {
           loadMoreGalleryBefore();
         }
       },
@@ -332,7 +345,8 @@ export default function Home() {
     }
 
     return () => observer.disconnect();
-  }, [activeView, query, hasMoreGalleryBefore, isLoadingMoreBefore, loadMoreGalleryBefore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, query, hasMoreGalleryBefore]);
 
   // Auto-sync when user starts searching (to load model)
   useEffect(() => {
@@ -492,18 +506,8 @@ export default function Home() {
       fetchData();
     } catch (err) {
       console.error('Failed to delete screenshots:', err);
-      // Show error to user - handle both Error objects and plain objects
-      let errorMessage = 'Unknown error';
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        // Handle cases where error is a plain object (e.g., { detail: "message" })
-        const errObj = err as Record<string, unknown>;
-        errorMessage = (errObj.detail as string) || (errObj.message as string) || JSON.stringify(err);
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      }
-      alert(`Failed to delete: ${errorMessage}. Make sure the server is running.`);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to delete: ${message}`);
     } finally {
       setIsBulkOperationLoading(false);
       setShowDeleteConfirm(false);
@@ -536,6 +540,8 @@ export default function Home() {
       fetchData();
     } catch (err) {
       console.error('Failed to hide screenshots:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to hide: ${message}`);
     } finally {
       setIsBulkOperationLoading(false);
       setShowHideConfirm(false);
@@ -568,6 +574,8 @@ export default function Home() {
       fetchData();
     } catch (err) {
       console.error('Failed to unhide screenshots:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to unhide: ${message}`);
     } finally {
       setIsBulkOperationLoading(false);
     }
@@ -681,9 +689,12 @@ export default function Home() {
 
         setGallerySnapshots(data.screenshots);
         setGalleryTotal(data.total);
+        // galleryOffset represents START of loaded window
         setGalleryOffset(startOffset);
         // Allow loading more in both directions
-        setHasMoreGallery(startOffset + data.screenshots.length < data.total);
+        // End of window is startOffset + loaded count
+        const endOffset = startOffset + data.screenshots.length;
+        setHasMoreGallery(endOffset < data.total);
         setHasMoreGalleryBefore(startOffset > 0);
 
         // Skip the first "load before" trigger since we're navigating to a specific position
@@ -717,6 +728,9 @@ export default function Home() {
 
     } catch (err) {
       console.error('Failed to navigate to grid:', err);
+      // IMPORTANT: Clear the skip flag on error to prevent permanently broken scroll-up
+      skipLoadBeforeRef.current = false;
+
       // Fallback to loading from start
       try {
         const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
@@ -724,7 +738,7 @@ export default function Home() {
           setGallerySnapshots(data.screenshots);
           setGalleryTotal(data.total);
           setGalleryOffset(0);
-          setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE);
+          setHasMoreGallery(data.screenshots.length < data.total);
           setHasMoreGalleryBefore(false);
         }
       } catch (fallbackErr) {

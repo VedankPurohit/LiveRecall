@@ -12,7 +12,8 @@ export interface UseSelectionReturn<T extends { id: number }> {
 
 export function useSelection<T extends { id: number }>(items: T[]): UseSelectionReturn<T> {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  // Store last selected ID instead of index to handle prepending/deleting items correctly
+  const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
 
   const isSelected = useCallback(
     (id: number) => selectedIds.has(id),
@@ -24,14 +25,23 @@ export function useSelection<T extends { id: number }>(items: T[]): UseSelection
       setSelectedIds((prev) => {
         const next = new Set(prev);
 
-        if (shiftKey && lastSelectedIndex !== null) {
-          // Range selection
-          const start = Math.min(lastSelectedIndex, index);
-          const end = Math.max(lastSelectedIndex, index);
-          for (let i = start; i <= end; i++) {
-            if (items[i]) {
-              next.add(items[i].id);
+        if (shiftKey && lastSelectedId !== null) {
+          // Range selection - find index of last selected item in current items array
+          const lastIndex = items.findIndex(item => item.id === lastSelectedId);
+          const currentIndex = index;
+
+          if (lastIndex !== -1) {
+            // Both items exist in the list, select the range
+            const start = Math.min(lastIndex, currentIndex);
+            const end = Math.max(lastIndex, currentIndex);
+            for (let i = start; i <= end; i++) {
+              if (items[i]) {
+                next.add(items[i].id);
+              }
             }
+          } else {
+            // Last selected item no longer in list, just select current
+            next.add(id);
           }
         } else {
           // Toggle single
@@ -44,14 +54,14 @@ export function useSelection<T extends { id: number }>(items: T[]): UseSelection
 
         return next;
       });
-      setLastSelectedIndex(index);
+      setLastSelectedId(id);
     },
-    [items, lastSelectedIndex]
+    [items, lastSelectedId]
   );
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
-    setLastSelectedIndex(null);
+    setLastSelectedId(null);
   }, []);
 
   const selectAll = useCallback(() => {
