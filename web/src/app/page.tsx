@@ -9,6 +9,7 @@ import {
   stopRecording,
   startSync,
   getScreenshots,
+  getScreenshotOffset,
   getDensity,
   getImageUrl,
   search,
@@ -83,12 +84,15 @@ export default function Home() {
   const [gallerySnapshots, setGallerySnapshots] = useState<Screenshot[]>([]);
   const [galleryTotal, setGalleryTotal] = useState(0);
 
-  // Infinite scroll state for gallery
+  // Infinite scroll state for gallery (bidirectional)
   const [galleryOffset, setGalleryOffset] = useState(0);
   const [hasMoreGallery, setHasMoreGallery] = useState(true);
+  const [hasMoreGalleryBefore, setHasMoreGalleryBefore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingMoreBefore, setIsLoadingMoreBefore] = useState(false);
   const GALLERY_PAGE_SIZE = 50;
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadMoreBeforeRef = useRef<HTMLDivElement>(null);
 
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -199,9 +203,10 @@ export default function Home() {
     if (activeView === 'search' && !query.trim()) {
       const fetchGallery = async () => {
         try {
-          // Reset pagination state
+          // Reset pagination state for both directions
           setGalleryOffset(0);
           setHasMoreGallery(true);
+          setHasMoreGalleryBefore(false); // Starting from offset 0, nothing before
           const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
           if (data?.screenshots) {
             setGallerySnapshots(data.screenshots);
@@ -239,7 +244,33 @@ export default function Home() {
     }
   }, [isLoadingMore, hasMoreGallery, galleryOffset, visibilityFilter, query, gallerySnapshots.length]);
 
-  // Intersection observer for infinite scroll
+  // Load more gallery images before current position (for bidirectional scroll)
+  const loadMoreGalleryBefore = useCallback(async () => {
+    if (isLoadingMoreBefore || !hasMoreGalleryBefore || galleryOffset <= 0 || query.trim()) return;
+
+    setIsLoadingMoreBefore(true);
+    try {
+      const loadCount = Math.min(GALLERY_PAGE_SIZE, galleryOffset);
+      const newOffset = galleryOffset - loadCount;
+
+      const data = await getScreenshots(loadCount, newOffset, undefined, undefined, visibilityFilter);
+
+      if (data?.screenshots?.length) {
+        // Prepend to existing screenshots
+        setGallerySnapshots(prev => [...data.screenshots, ...prev]);
+        setGalleryOffset(newOffset);
+        setHasMoreGalleryBefore(newOffset > 0);
+      } else {
+        setHasMoreGalleryBefore(false);
+      }
+    } catch (err) {
+      console.error('Failed to load more gallery (before):', err);
+    } finally {
+      setIsLoadingMoreBefore(false);
+    }
+  }, [isLoadingMoreBefore, hasMoreGalleryBefore, galleryOffset, visibilityFilter, query]);
+
+  // Intersection observer for infinite scroll (load more at bottom)
   useEffect(() => {
     if (activeView !== 'search' || query.trim()) return;
 
@@ -258,6 +289,26 @@ export default function Home() {
 
     return () => observer.disconnect();
   }, [activeView, query, hasMoreGallery, isLoadingMore, loadMoreGallery]);
+
+  // Intersection observer for bidirectional scroll (load more at top)
+  useEffect(() => {
+    if (activeView !== 'search' || query.trim() || !hasMoreGalleryBefore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreGalleryBefore && !isLoadingMoreBefore) {
+          loadMoreGalleryBefore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (loadMoreBeforeRef.current) {
+      observer.observe(loadMoreBeforeRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [activeView, query, hasMoreGalleryBefore, isLoadingMoreBefore, loadMoreGalleryBefore]);
 
   // Auto-sync when user starts searching (to load model)
   useEffect(() => {
@@ -396,22 +447,23 @@ export default function Home() {
     try {
       const ids = Array.from(selection.selectedIds);
       await bulkDeleteScreenshots(ids);
-      selection.clearSelection();
-      // Refresh data
-      await fetchData();
+
+      // Remove deleted items from current view immediately
+      const idSet = new Set(ids);
       if (activeView === 'search') {
         if (query.trim()) {
-          // Re-query search to refresh results
-          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
-          setSearchResults(data?.results || []);
+          setSearchResults(prev => prev.filter(s => !idSet.has(s.id)));
         } else {
-          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
-          if (data?.screenshots) {
-            setGallerySnapshots(data.screenshots);
-            setGalleryTotal(data.total);
-          }
+          setGallerySnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+          setGalleryTotal(prev => Math.max(0, prev - ids.length));
         }
+      } else if (activeView === 'timeline') {
+        setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
       }
+
+      selection.clearSelection();
+      // Refresh background data (for totals, stats etc.)
+      fetchData();
     } catch (err) {
       console.error('Failed to delete screenshots:', err);
     } finally {
@@ -560,39 +612,56 @@ export default function Home() {
     // Switch to search view (grid mode)
     setActiveView('search');
     setQuery(''); // Clear search query to show gallery
+    setSelectedImage(null);
 
-    // Check if the screenshot is in the current gallery
-    const existingIndex = gallerySnapshots.findIndex(s => s.id === screenshot.id);
+    try {
+      // Get the target screenshot's position in the sorted list
+      const { offset: targetOffset } = await getScreenshotOffset(screenshot.id, visibilityFilter);
 
-    if (existingIndex === -1) {
-      // Need to load gallery with this screenshot
+      // Calculate a starting offset that centers the target image
+      // Load GALLERY_PAGE_SIZE images before and after the target
+      const startOffset = Math.max(0, targetOffset - Math.floor(GALLERY_PAGE_SIZE / 2));
+
+      // Load screenshots around the target position
+      const data = await getScreenshots(GALLERY_PAGE_SIZE * 2, startOffset, undefined, undefined, visibilityFilter);
+
+      if (data?.screenshots) {
+        setGallerySnapshots(data.screenshots);
+        setGalleryTotal(data.total);
+        setGalleryOffset(startOffset);
+        // Allow loading more in both directions
+        setHasMoreGallery(startOffset + data.screenshots.length < data.total);
+        setHasMoreGalleryBefore(startOffset > 0);
+      }
+
+      // Highlight and scroll to target
+      setHighlightedId(screenshot.id);
+
+      setTimeout(() => {
+        const element = document.getElementById(`grid-item-${screenshot.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        setTimeout(() => setHighlightedId(null), 2000);
+      }, 150);
+
+    } catch (err) {
+      console.error('Failed to navigate to grid:', err);
+      // Fallback to loading from start
       try {
-        const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+        const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
         if (data?.screenshots) {
           setGallerySnapshots(data.screenshots);
           setGalleryTotal(data.total);
+          setGalleryOffset(0);
+          setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE);
+          setHasMoreGalleryBefore(false);
         }
-      } catch (err) {
-        console.error('Failed to load gallery:', err);
+      } catch (fallbackErr) {
+        console.error('Fallback gallery load failed:', fallbackErr);
       }
     }
-
-    // Close lightbox
-    setSelectedImage(null);
-
-    // Set highlighted ID for visual feedback
-    setHighlightedId(screenshot.id);
-
-    // Scroll to the image after a brief delay for render
-    setTimeout(() => {
-      const element = document.getElementById(`grid-item-${screenshot.id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      // Clear highlight after 2 seconds
-      setTimeout(() => setHighlightedId(null), 2000);
-    }, 150);
-  }, [gallerySnapshots, visibilityFilter]);
+  }, [visibilityFilter]);
 
   // Navigate to a specific screenshot in the timeline
   const navigateToTimeline = useCallback(async (screenshot: Screenshot) => {
@@ -1004,6 +1073,20 @@ export default function Home() {
                 if (itemsToShow.length > 0) {
                   return (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                      {/* Top sentinel for bidirectional scroll - only show for gallery (not search results) */}
+                      {!query.trim() && hasMoreGalleryBefore && (
+                        <div
+                          ref={loadMoreBeforeRef}
+                          className="col-span-full h-12 flex items-center justify-center"
+                        >
+                          {isLoadingMoreBefore && (
+                            <div className="flex items-center gap-2 text-[#555]">
+                              <div className="w-4 h-4 border-2 border-[#333] border-t-[#86efac] rounded-full animate-spin" />
+                              <span className="text-xs">Loading older...</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {itemsToShow.map((snapshot, index) => {
                         const isSelected = selection.isSelected(snapshot.id);
                         const isHighlighted = highlightedId === snapshot.id;

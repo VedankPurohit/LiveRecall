@@ -222,6 +222,27 @@ async def get_screenshot_image(
     )
 
 
+@router.get("/{screenshot_id}/offset")
+async def get_screenshot_offset(
+    screenshot_id: int,
+    visibility: VisibilityQuery = VisibilityFilter.VISIBLE_ONLY,
+):
+    """
+    Get the offset/position of a screenshot in the sorted list.
+
+    This endpoint returns the number of screenshots that appear before this one
+    in the timestamp-sorted list (newest first). Useful for navigating to a
+    specific screenshot in paginated views.
+
+    - screenshot_id: The ID of the screenshot
+    - visibility: Filter by visibility (visible_only, hidden_only, all)
+    """
+    offset = db.get_screenshot_offset(screenshot_id, visibility.value)
+    if offset is None:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    return {"offset": offset}
+
+
 @router.delete("/{screenshot_id}", response_model=SuccessResponse)
 async def delete_screenshot(screenshot_id: int, delete_file: bool = True):
     """

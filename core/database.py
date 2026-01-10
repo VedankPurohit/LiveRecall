@@ -287,6 +287,43 @@ class Database:
             cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
+    def get_screenshot_offset(
+        self,
+        screenshot_id: int,
+        visibility: str = "visible_only",
+    ) -> int | None:
+        """Get the offset/position of a screenshot in the sorted list (timestamp DESC).
+
+        Returns the number of screenshots that come before this one (have higher timestamps).
+        Returns None if screenshot not found.
+
+        Args:
+            screenshot_id: The ID of the screenshot
+            visibility: One of "visible_only", "hidden_only", or "all"
+        """
+        with self.cursor() as cur:
+            # First get the target screenshot's timestamp
+            cur.execute("SELECT timestamp FROM screenshots WHERE id = ?", [screenshot_id])
+            row = cur.fetchone()
+            if not row:
+                return None
+            target_ts = row[0]
+
+            # Build visibility filter
+            conditions: list[str] = ["timestamp > ?"]
+            params: list[str | int] = [target_ts]
+
+            if visibility == "visible_only":
+                conditions.append("(is_hidden = 0 OR is_hidden IS NULL)")
+            elif visibility == "hidden_only":
+                conditions.append("is_hidden = 1")
+            # "all" - no visibility condition
+
+            where_clause = "WHERE " + " AND ".join(conditions)
+            query = f"SELECT COUNT(*) FROM screenshots {where_clause}"
+            cur.execute(query, params)
+            return cur.fetchone()[0]
+
     def get_screenshots_count(
         self,
         start_date: str | None = None,

@@ -178,6 +178,14 @@ export async function getScreenshotById(id: number): Promise<Screenshot> {
   return fetchApi(`/screenshots/${id}`);
 }
 
+export async function getScreenshotOffset(
+  screenshotId: number,
+  visibility: VisibilityFilter = 'visible_only'
+): Promise<{ offset: number }> {
+  const params = new URLSearchParams({ visibility });
+  return fetchApi(`/screenshots/${screenshotId}/offset?${params}`);
+}
+
 // Timeline
 export async function getDateRange(visibility: VisibilityFilter = 'visible_only'): Promise<DateRange> {
   return fetchApi(`/screenshots/date-range?visibility=${visibility}`);
