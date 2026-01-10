@@ -2,7 +2,7 @@
 Tray application configuration
 """
 
-import sys
+from core.platform import current_platform
 
 # API settings
 API_HOST = "127.0.0.1"
@@ -17,7 +17,7 @@ STATUS_POLL_INTERVAL = 2.0
 HEALTH_CHECK_TIMEOUT = 5.0
 STARTUP_TIMEOUT = 30.0
 
-# Icon sizes
+# Icon sizes (kept for backwards compatibility with tests)
 ICON_SIZE_MAC = (22, 22)
 ICON_SIZE_DEFAULT = (32, 32)
 
@@ -28,13 +28,16 @@ COLOR_SYNCING = (0, 122, 255)  # Blue
 COLOR_ERROR = (255, 149, 0)  # Orange
 COLOR_WHITE = (255, 255, 255)
 
-# Platform detection
-PLATFORM = "macos" if sys.platform == "darwin" else "windows" if sys.platform == "win32" else "linux"
+# Platform detection - delegate to platform layer
+PLATFORM = current_platform.name
 
 
 def get_icon_size() -> tuple[int, int]:
-    """Get platform-appropriate icon size"""
-    return ICON_SIZE_MAC if PLATFORM == "macos" else ICON_SIZE_DEFAULT
+    """Get platform-appropriate icon size.
+
+    Delegates to the platform abstraction layer.
+    """
+    return current_platform.get_tray_icon_size()
 
 
 # Capture modes available

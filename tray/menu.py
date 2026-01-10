@@ -4,7 +4,6 @@ Menu construction for system tray
 
 from __future__ import annotations
 
-import subprocess
 import webbrowser
 from collections.abc import Callable
 from typing import Any
@@ -12,22 +11,16 @@ from typing import Any
 from pystray import Menu
 from pystray import MenuItem as Item
 
+from core.platform import current_platform
+
 from .api_client import SystemStatus
-from .config import CAPTURE_MODES, PLATFORM, WEB_UI_URL
+from .config import CAPTURE_MODES, WEB_UI_URL
 
 
 def open_data_folder():
     """Open the data folder in file explorer"""
-    from core.config import get_data_dir
-
-    data_dir = get_data_dir()
-
-    if PLATFORM == "macos":
-        subprocess.run(["open", str(data_dir)])
-    elif PLATFORM == "windows":
-        subprocess.run(["explorer", str(data_dir)])
-    else:  # linux
-        subprocess.run(["xdg-open", str(data_dir)])
+    data_dir = current_platform.get_data_dir()
+    current_platform.open_folder(data_dir)
 
 
 def open_web_search():
