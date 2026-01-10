@@ -295,6 +295,75 @@ def create_dmg(app_path: Path) -> Path:
     return dmg_path
 
 
+def create_windows_zip(exe_path: Path) -> Path:
+    """Create Windows portable ZIP archive"""
+    import zipfile
+
+    print_step("Creating Windows ZIP archive")
+
+    arch = platform.machine()
+    # Map platform.machine() to common names
+    arch_name = "x64" if arch in ("AMD64", "x86_64") else arch
+    zip_name = f"{APP_NAME}-{VERSION}-Windows-{arch_name}.zip"
+    zip_path = ROOT / "dist" / zip_name
+
+    if zip_path.exists():
+        zip_path.unlink()
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        if exe_path.is_file():
+            # Single-file EXE
+            zf.write(exe_path, exe_path.name)
+        elif exe_path.is_dir():
+            # Directory with multiple files (if using COLLECT in PyInstaller)
+            for file in exe_path.rglob("*"):
+                if file.is_file():
+                    arcname = file.relative_to(exe_path.parent)
+                    zf.write(file, arcname)
+
+    print_success(f"Created {zip_name} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
+    return zip_path
+
+
+def create_windows_installer(exe_path: Path) -> Path | None:
+    """Create Windows installer using NSIS (if available)"""
+    print_step("Creating Windows installer")
+
+    nsis_available = shutil.which("makensis")
+
+    if not nsis_available:
+        print_warning("NSIS not found. Skipping installer creation.")
+        print_warning("Install NSIS from: https://nsis.sourceforge.io/")
+        return None
+
+    nsi_script = ROOT / "installer" / "windows.nsi"
+    if not nsi_script.exists():
+        print_warning(f"NSIS script not found: {nsi_script}")
+        print_warning("Skipping installer creation.")
+        return None
+
+    arch = platform.machine()
+    arch_name = "x64" if arch in ("AMD64", "x86_64") else arch
+    installer_name = f"{APP_NAME}-{VERSION}-Windows-{arch_name}-Setup.exe"
+    installer_path = ROOT / "dist" / installer_name
+
+    try:
+        run(
+            [
+                "makensis",
+                f"/DVERSION={VERSION}",
+                f"/DEXE_PATH={exe_path}",
+                f"/DOUTFILE={installer_path}",
+                str(nsi_script),
+            ]
+        )
+        print_success(f"Created {installer_name} ({installer_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        return installer_path
+    except subprocess.CalledProcessError as e:
+        print_error(f"NSIS build failed: {e}")
+        return None
+
+
 # ============================================================================
 # Main
 # ============================================================================
@@ -306,10 +375,13 @@ def main():
 Examples:
   python scripts/build_release.py             # Full build (always rebuilds web UI)
   python scripts/build_release.py --skip-web  # Skip web rebuild (use existing)
+  python scripts/build_release.py --skip-installer  # Skip installer creation (Windows)
         """,
     )
     parser.add_argument("--skip-web", action="store_true", help="Skip web rebuild (use existing build)")
     parser.add_argument("--skip-dmg", action="store_true", help="Skip DMG creation (macOS)")
+    parser.add_argument("--skip-installer", action="store_true", help="Skip installer creation (Windows)")
+    parser.add_argument("--skip-zip", action="store_true", help="Skip ZIP creation (Windows)")
     args = parser.parse_args()
 
     print(f"\n{Colors.HEADER}{Colors.BOLD}LiveRecall Release Builder v{VERSION}{Colors.END}")
@@ -340,20 +412,41 @@ Examples:
 
         # Step 5: Create platform package
         system = platform.system()
-        if system == "Darwin" and not args.skip_dmg:
-            dmg = create_dmg(artifact)
+        if system == "Darwin":
+            # macOS: Create DMG installer
+            dmg = None
+            if not args.skip_dmg:
+                dmg = create_dmg(artifact)
 
             print(f"\n{Colors.GREEN}{Colors.BOLD}Build complete!{Colors.END}")
             print("\nOutput files:")
             print(f"  App:  {artifact}")
-            print(f"  DMG:  {dmg}")
+            if dmg:
+                print(f"  DMG:  {dmg}")
             print("\nTo install: Open the DMG and drag LiveRecall to Applications")
 
         elif system == "Windows":
+            # Windows: Create ZIP (always) and installer (optional)
+            zip_file = None
+            installer_file = None
+
+            if not args.skip_zip:
+                zip_file = create_windows_zip(artifact)
+
+            if not args.skip_installer:
+                installer_file = create_windows_installer(artifact)
+
             print(f"\n{Colors.GREEN}{Colors.BOLD}Build complete!{Colors.END}")
-            print(f"\nOutput: {artifact}")
+            print("\nOutput files:")
+            print(f"  EXE:  {artifact}")
+            if zip_file:
+                print(f"  ZIP:  {zip_file}")
+            if installer_file:
+                print(f"  Installer:  {installer_file}")
+            print("\nTo install: Extract ZIP or run the installer")
 
         else:
+            # Linux (future)
             print(f"\n{Colors.GREEN}{Colors.BOLD}Build complete!{Colors.END}")
             print(f"\nOutput: {artifact}")
 
