@@ -1,0 +1,196 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS'
+        type: boolean
+        default: true
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    if: ${{ github.event_name == 'push' || inputs.build_windows }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Install Node.js dependencies
+        run: cd web && npm ci
+
+      - name: Build web UI
+        run: cd web && npm run build
+
+      - name: Generate icons
+        run: uv run python scripts/generate_icons.py
+
+      - name: Build with PyInstaller
+        run: uv run pyinstaller liverecall.spec --noconfirm
+
+      - name: Create ZIP archive
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          Compress-Archive -Path dist\LiveRecall.exe -DestinationPath "dist\LiveRecall-$version-Windows-x64.zip"
+        shell: pwsh
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/LiveRecall.exe
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/LiveRecall-*-Windows-x64.zip
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/LiveRecall-*-Windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    if: ${{ github.event_name == 'push' || inputs.build_macos }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Install Node.js dependencies
+        run: cd web && npm ci
+
+      - name: Build web UI
+        run: cd web && npm run build
+
+      - name: Generate icons
+        run: uv run python scripts/generate_icons.py
+
+      - name: Build with PyInstaller
+        run: uv run pyinstaller liverecall.spec --noconfirm
+
+      - name: Create DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH=$(uname -m)
+
+          # Create staging directory
+          mkdir -p dist/dmg_staging
+          cp -R dist/LiveRecall.app dist/dmg_staging/
+          ln -s /Applications dist/dmg_staging/Applications
+
+          # Create DMG
+          hdiutil create -volname LiveRecall -srcfolder dist/dmg_staging -ov -format UDZO "dist/LiveRecall-${VERSION}-macOS-${ARCH}.dmg"
+
+          # Cleanup
+          rm -rf dist/dmg_staging
+
+      - name: Upload macOS App
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/LiveRecall.app
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/LiveRecall-*-macOS-*.dmg
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/LiveRecall-*-macOS-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Run tests on both platforms
+  test-windows:
+    name: Test Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest -v --tb=short
+
+  test-macos:
+    name: Test macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest -v --tb=short
