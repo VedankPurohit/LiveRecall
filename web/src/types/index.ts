@@ -5,12 +5,16 @@ export interface Screenshot {
   image_path: string;
   timestamp: string;
   has_embedding: number;
+  is_hidden: boolean;
   is_compressed: number;
   original_size_bytes: number | null;
   compressed_at: string | null;
   created_at: string;
   similarity?: number;
 }
+
+// Visibility filter for screenshots
+export type VisibilityFilter = 'visible_only' | 'hidden_only' | 'all';
 
 export interface SearchResult {
   query: string;
@@ -40,11 +44,19 @@ export interface RecordingStatus {
   threshold: number;
 }
 
+// Incognito mode status
+export interface IncognitoStatus {
+  active: boolean;
+  remaining_seconds: number;
+  until_timestamp: number | null;
+}
+
 export interface SystemStatus {
   healthy: boolean;
   recording: RecordingStatus;
   database: DatabaseStats;
   model: ModelStatus;
+  incognito: IncognitoStatus;
   data_dir: string;
 }
 
@@ -135,4 +147,12 @@ export interface SearchParams {
   safe_mode_level?: string;
   start_date?: string;
   end_date?: string;
+  visibility?: VisibilityFilter;
+}
+
+// Bulk operations
+export interface BulkOperationResponse {
+  success: boolean;
+  affected_count: number;
+  message: string;
 }

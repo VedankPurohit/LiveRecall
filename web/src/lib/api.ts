@@ -11,6 +11,9 @@ import type {
   DensityResponse,
   SearchParams,
   Screenshot,
+  VisibilityFilter,
+  IncognitoStatus,
+  BulkOperationResponse,
 } from '@/types';
 
 const API_BASE = '/api/v1';
@@ -73,7 +76,8 @@ export async function search(
   safeMode: boolean = true,
   safeModeLevel?: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  visibility: VisibilityFilter = 'visible_only'
 ): Promise<SearchResult> {
   return fetchApi('/search', {
     method: 'POST',
@@ -84,6 +88,7 @@ export async function search(
       safe_mode_level: safeModeLevel ?? 'mid',
       start_date: startDate,
       end_date: endDate,
+      visibility,
     }),
   });
 }
@@ -98,6 +103,7 @@ export async function searchWithParams(params: SearchParams): Promise<SearchResu
       safe_mode_level: params.safe_mode_level ?? 'mid',
       start_date: params.start_date,
       end_date: params.end_date,
+      visibility: params.visibility ?? 'visible_only',
     }),
   });
 }
@@ -155,11 +161,13 @@ export async function getScreenshots(
   limit: number = 50,
   offset: number = 0,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  visibility: VisibilityFilter = 'visible_only'
 ): Promise<{ total: number; screenshots: Screenshot[] }> {
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
+    visibility,
   });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -171,12 +179,12 @@ export async function getScreenshotById(id: number): Promise<Screenshot> {
 }
 
 // Timeline
-export async function getDateRange(): Promise<DateRange> {
-  return fetchApi('/screenshots/date-range');
+export async function getDateRange(visibility: VisibilityFilter = 'visible_only'): Promise<DateRange> {
+  return fetchApi(`/screenshots/date-range?visibility=${visibility}`);
 }
 
-export async function getDensity(buckets: number = 100): Promise<DensityResponse> {
-  return fetchApi(`/screenshots/density?buckets=${buckets}`);
+export async function getDensity(buckets: number = 100, visibility: VisibilityFilter = 'visible_only'): Promise<DensityResponse> {
+  return fetchApi(`/screenshots/density?buckets=${buckets}&visibility=${visibility}`);
 }
 
 export async function deleteScreenshot(id: number): Promise<ApiResponse<void>> {
@@ -204,4 +212,42 @@ export async function resetPermissions(): Promise<{ success: boolean; message: s
 
 export async function completeSetup(): Promise<{ success: boolean; message: string }> {
   return fetchApi('/setup/complete', { method: 'POST' });
+}
+
+// Bulk Operations
+export async function bulkDeleteScreenshots(ids: number[]): Promise<BulkOperationResponse> {
+  return fetchApi('/screenshots/bulk', {
+    method: 'DELETE',
+    body: JSON.stringify({ screenshot_ids: ids }),
+  });
+}
+
+export async function bulkHideScreenshots(ids: number[]): Promise<BulkOperationResponse> {
+  return fetchApi('/screenshots/bulk/hide', {
+    method: 'POST',
+    body: JSON.stringify({ screenshot_ids: ids }),
+  });
+}
+
+export async function bulkUnhideScreenshots(ids: number[]): Promise<BulkOperationResponse> {
+  return fetchApi('/screenshots/bulk/unhide', {
+    method: 'POST',
+    body: JSON.stringify({ screenshot_ids: ids }),
+  });
+}
+
+// Incognito Mode
+export async function getIncognitoStatus(): Promise<IncognitoStatus> {
+  return fetchApi('/incognito/status');
+}
+
+export async function setIncognitoMode(durationMinutes: number): Promise<ApiResponse<void>> {
+  return fetchApi('/incognito/set', {
+    method: 'POST',
+    body: JSON.stringify({ duration_minutes: durationMinutes }),
+  });
+}
+
+export async function stopIncognitoMode(): Promise<ApiResponse<void>> {
+  return fetchApi('/incognito/stop', { method: 'POST' });
 }

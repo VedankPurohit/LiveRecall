@@ -6,6 +6,7 @@ Platform-specific paths and settings with persistence
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -89,11 +90,23 @@ class CaptureSettings:
 
 
 @dataclass
+class IncognitoSettings:
+    """Incognito/private mode settings - new captures are hidden"""
+
+    active: bool = False
+    until: float | None = None  # Unix timestamp when incognito should auto-disable
+
+    # Duration options in minutes
+    DURATION_OPTIONS = [5, 15, 30, 60]
+
+
+@dataclass
 class Config:
     """Main configuration"""
 
     capture: CaptureSettings = field(default_factory=CaptureSettings)
     compression: CompressionSettings = field(default_factory=CompressionSettings)
+    incognito: IncognitoSettings = field(default_factory=IncognitoSettings)
     encryption_enabled: bool = True
     safe_mode_enabled: bool = True
     safe_mode_level: str = "mid"  # low, mid, high
@@ -113,6 +126,45 @@ class Config:
     def database_path(self) -> Path:
         return get_database_path()
 
+    # --- Incognito mode methods ---
+
+    def is_incognito_mode(self) -> bool:
+        """Check if incognito mode is currently active and not expired."""
+        if not self.incognito.active:
+            return False
+        if self.incognito.until is None:
+            return False
+
+        # Check if expired
+        if time.time() > self.incognito.until:
+            # Auto-disable expired incognito
+            self.incognito.active = False
+            self.incognito.until = None
+            self.save()
+            return False
+
+        return True
+
+    def get_incognito_remaining_seconds(self) -> int:
+        """Get seconds remaining in incognito mode, or 0 if not active."""
+        if not self.is_incognito_mode():
+            return 0
+        if self.incognito.until is None:
+            return 0
+        return max(0, int(self.incognito.until - time.time()))
+
+    def enable_incognito(self, duration_minutes: int):
+        """Enable incognito mode with auto-expire after duration."""
+        self.incognito.active = True
+        self.incognito.until = time.time() + (duration_minutes * 60)
+        self.save()
+
+    def disable_incognito(self):
+        """Disable incognito mode."""
+        self.incognito.active = False
+        self.incognito.until = None
+        self.save()
+
     def save(self):
         """Save config to JSON file"""
         config_path = get_config_path()
@@ -128,6 +180,10 @@ class Config:
                 "enabled": self.compression.enabled,
                 "after_days": self.compression.after_days,
                 "quality": self.compression.quality,
+            },
+            "incognito": {
+                "active": self.incognito.active,
+                "until": self.incognito.until,
             },
             "encryption_enabled": self.encryption_enabled,
             "safe_mode_enabled": self.safe_mode_enabled,
@@ -163,6 +219,12 @@ class Config:
                 self.compression.enabled = comp.get("enabled", self.compression.enabled)
                 self.compression.after_days = comp.get("after_days", self.compression.after_days)
                 self.compression.quality = comp.get("quality", self.compression.quality)
+
+            # Load incognito settings
+            if "incognito" in data:
+                inc = data["incognito"]
+                self.incognito.active = inc.get("active", self.incognito.active)
+                self.incognito.until = inc.get("until", self.incognito.until)
 
             # Load other settings
             self.encryption_enabled = data.get("encryption_enabled", self.encryption_enabled)

@@ -23,6 +23,8 @@ class SystemStatus:
     model_loaded: bool = False
     model_device: str | None = None
     healthy: bool = False
+    incognito_active: bool = False
+    incognito_remaining_seconds: int = 0
 
 
 class APIClient:
@@ -74,6 +76,11 @@ class APIClient:
                 model = data.get("model", {})
                 status.model_loaded = model.get("loaded", False)
                 status.model_device = model.get("device")
+
+                # Incognito
+                incognito = data.get("incognito", {})
+                status.incognito_active = incognito.get("active", False)
+                status.incognito_remaining_seconds = incognito.get("remaining_seconds", 0)
         except Exception:
             pass
 
@@ -137,6 +144,22 @@ class APIClient:
             return None
         except Exception:
             return None
+
+    def set_incognito_mode(self, duration_minutes: int) -> bool:
+        """Set incognito mode duration (0 to disable)"""
+        try:
+            resp = self.client.post(f"{self.base_url}/incognito/set", json={"duration_minutes": duration_minutes})
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def stop_incognito_mode(self) -> bool:
+        """Stop incognito mode"""
+        try:
+            resp = self.client.post(f"{self.base_url}/incognito/stop")
+            return resp.status_code == 200
+        except Exception:
+            return False
 
 
 # Global client instance

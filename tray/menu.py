@@ -40,6 +40,22 @@ def open_web_timeline():
     webbrowser.open(WEB_UI_URL)
 
 
+INCOGNITO_DURATIONS = [
+    (0, "Off"),
+    (5, "5 minutes"),
+    (15, "15 minutes"),
+    (30, "30 minutes"),
+    (60, "1 hour"),
+]
+
+
+def format_remaining_time(seconds: int) -> str:
+    """Format remaining seconds as MM:SS"""
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins}:{secs:02d}"
+
+
 class MenuBuilder:
     """Builds and updates the system tray menu"""
 
@@ -48,12 +64,14 @@ class MenuBuilder:
         on_toggle_recording: Callable,
         on_sync: Callable,
         on_set_mode: Callable[[str], None],
+        on_set_incognito: Callable[[int], None],
         on_quit: Callable,
         on_download_update: Callable = None,
     ):
         self.on_toggle_recording = on_toggle_recording
         self.on_sync = on_sync
         self.on_set_mode = on_set_mode
+        self.on_set_incognito = on_set_incognito
         self.on_quit = on_quit
         self.on_download_update = on_download_update
 
@@ -83,6 +101,26 @@ class MenuBuilder:
 
         return check
 
+    def _make_incognito_handler(self, duration: int):
+        """Create a handler for incognito duration selection"""
+
+        def handler():
+            self.on_set_incognito(duration)
+
+        return handler
+
+    def _is_incognito_checked(self, duration: int):
+        """Check if incognito duration is currently active"""
+
+        def check(item):
+            if duration == 0:
+                return not self._status.incognito_active
+            # For non-zero durations, check if incognito is active
+            # (we can't easily know which duration was selected, so just show active state)
+            return self._status.incognito_active and duration > 0
+
+        return check
+
     def build(self) -> Menu:
         """Build the menu structure"""
         status = self._status
@@ -109,9 +147,25 @@ class MenuBuilder:
             for mode in CAPTURE_MODES
         ]
 
+        # Incognito submenu
+        incognito_items = [
+            Item(
+                label, self._make_incognito_handler(duration), checked=self._is_incognito_checked(duration), radio=True
+            )
+            for duration, label in INCOGNITO_DURATIONS
+        ]
+
+        # Incognito menu label with remaining time if active
+        # Note: Icon badge shows incognito state, no emoji needed in label
+        if status.incognito_active:
+            incognito_label = f"Incognito ({format_remaining_time(status.incognito_remaining_seconds)})"
+        else:
+            incognito_label = "Incognito Mode"
+
         # Build menu items
         items = [
             Item(recording_text, self.on_toggle_recording, default=True),
+            Item(incognito_label, Menu(*incognito_items)),
             Menu.SEPARATOR,
             Item(f"Mode: {status.recording_mode}", Menu(*mode_items)),
             Menu.SEPARATOR,

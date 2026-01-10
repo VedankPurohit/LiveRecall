@@ -9,6 +9,7 @@ from api.schemas import (
     SearchRequest,
     SearchResponse,
     SearchResult,
+    VisibilityFilter,
 )
 from core.config import config
 from core.database import db
@@ -69,7 +70,12 @@ async def search_screenshots(request: SearchRequest):
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
 
     try:
-        results = db.search_similar(embedding, limit=search_limit, similarity_metric=config.similarity_metric)
+        results = db.search_similar(
+            embedding,
+            limit=search_limit,
+            similarity_metric=config.similarity_metric,
+            visibility=request.visibility.value,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -116,6 +122,7 @@ async def quick_search(
     safe_mode: bool = False,
     start_date: str = None,
     end_date: str = None,
+    visibility: VisibilityFilter = VisibilityFilter.VISIBLE_ONLY,
 ):
     """
     Quick search with query parameters (simpler than POST).
@@ -125,6 +132,7 @@ async def quick_search(
 
     Example: /api/v1/search/quick?q=blue+shirt&limit=10
     Example with dates: /api/v1/search/quick?q=meeting&start_date=251201000000&end_date=251206235959
+    Example with visibility: /api/v1/search/quick?q=meeting&visibility=all
     """
     request = SearchRequest(
         query=q,
@@ -132,5 +140,6 @@ async def quick_search(
         safe_mode=safe_mode,
         start_date=start_date,
         end_date=end_date,
+        visibility=visibility,
     )
     return await search_screenshots(request)

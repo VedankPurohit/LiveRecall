@@ -94,9 +94,12 @@ class CaptureService:
         # Save image
         image.save(str(filepath), "JPEG", quality=config.capture.quality)
 
+        # Check if incognito mode is active (auto-expires if needed)
+        is_hidden = config.is_incognito_mode()
+
         # Add to database (without embedding)
         timestamp = time.strftime("%y%m%d%H%M%S")
-        db.add_screenshot(str(filepath), timestamp)
+        db.add_screenshot(str(filepath), timestamp, is_hidden=is_hidden)
 
         return str(filepath)
 

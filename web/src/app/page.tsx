@@ -12,14 +12,25 @@ import {
   getDensity,
   getImageUrl,
   search,
+  getIncognitoStatus,
+  setIncognitoMode,
+  stopIncognitoMode,
+  bulkDeleteScreenshots,
+  bulkHideScreenshots,
+  bulkUnhideScreenshots,
 } from '@/lib/api';
-import type { Screenshot, SystemStatus, SyncStatus, DensityBucket } from '@/types';
+import type { Screenshot, SystemStatus, SyncStatus, DensityBucket, IncognitoStatus, VisibilityFilter } from '@/types';
+import { useSelection } from '@/hooks/useSelection';
+import { SelectionToolbar } from '@/components/SelectionToolbar';
+import { ConfirmationDialog } from '@/components/ConfirmationDialog';
+import { IncognitoIndicator } from '@/components/IncognitoIndicator';
 
 // localStorage keys
 const STORAGE_KEYS = {
   SAFE_MODE: 'liverecall_safe_mode',
   SAFE_MODE_LEVEL: 'liverecall_safe_mode_level',
   DATE_PRESET: 'liverecall_date_preset',
+  VISIBILITY_FILTER: 'liverecall_visibility_filter',
 };
 
 const SAFE_MODE_LEVELS = [
@@ -52,9 +63,42 @@ export default function Home() {
   const [safeModeLevel, setSafeModeLevel] = useState<string>('mid');
   const [hasTriggeredSync, setHasTriggeredSync] = useState(false);
 
+  // Incognito state
+  const [incognitoStatus, setIncognitoStatus] = useState<IncognitoStatus>({
+    active: false,
+    remaining_seconds: 0,
+    until_timestamp: null,
+  });
+  const [isIncognitoLoading, setIsIncognitoLoading] = useState(false);
+
+  // Visibility filter
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('visible_only');
+
+  // Selection state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showHideConfirm, setShowHideConfirm] = useState(false);
+  const [isBulkOperationLoading, setIsBulkOperationLoading] = useState(false);
+
+  // Gallery state (all snapshots for search view when query is empty)
+  const [gallerySnapshots, setGallerySnapshots] = useState<Screenshot[]>([]);
+  const [galleryTotal, setGalleryTotal] = useState(0);
+
+  // Infinite scroll state for gallery
+  const [galleryOffset, setGalleryOffset] = useState(0);
+  const [hasMoreGallery, setHasMoreGallery] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const GALLERY_PAGE_SIZE = 50;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+
+  // Selection hook - works with current view's items
+  const currentViewItems = activeView === 'search'
+    ? (query.trim() ? searchResults : gallerySnapshots)
+    : snapshots;
+  const selection = useSelection(currentViewItems);
 
   // Load preferences from localStorage
   useEffect(() => {
@@ -71,6 +115,25 @@ export default function Home() {
       setDatePreset(savedDatePreset);
       handleDatePreset(savedDatePreset, false);
     }
+    const savedVisibilityFilter = localStorage.getItem(STORAGE_KEYS.VISIBILITY_FILTER);
+    if (savedVisibilityFilter) {
+      setVisibilityFilter(savedVisibilityFilter as VisibilityFilter);
+    }
+  }, []);
+
+  // Fetch incognito status
+  useEffect(() => {
+    const fetchIncognitoStatus = async () => {
+      try {
+        const status = await getIncognitoStatus();
+        setIncognitoStatus(status);
+      } catch (err) {
+        console.error('Failed to fetch incognito status:', err);
+      }
+    };
+    fetchIncognitoStatus();
+    const interval = setInterval(fetchIncognitoStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Save safe mode preferences
@@ -102,31 +165,99 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [snapshotsData, densityData] = await Promise.all([
-          getScreenshots(500, 0),
-          getDensity(100),
-        ]);
-        if (snapshotsData?.screenshots) {
-          setSnapshots(snapshotsData.screenshots);
-          setTotalSnapshots(snapshotsData.total);
-        }
-        if (densityData?.buckets) {
-          setDensityBuckets(densityData.buckets);
-        }
-        if (snapshotsData?.screenshots?.length > 0) {
-          setCurrentIndex(0);
-        }
-      } catch (err) {
-        console.error('Failed to fetch data:', err);
-      } finally {
-        setIsLoading(false);
+  // Refetch data when visibility filter changes
+  const fetchData = useCallback(async () => {
+    try {
+      const [snapshotsData, densityData] = await Promise.all([
+        getScreenshots(500, 0, undefined, undefined, visibilityFilter),
+        getDensity(100, visibilityFilter),
+      ]);
+      if (snapshotsData?.screenshots) {
+        setSnapshots(snapshotsData.screenshots);
+        setTotalSnapshots(snapshotsData.total);
       }
-    };
+      if (densityData?.buckets) {
+        setDensityBuckets(densityData.buckets);
+      }
+      if (snapshotsData?.screenshots?.length > 0) {
+        setCurrentIndex(0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [visibilityFilter]);
+
+  useEffect(() => {
+    setIsLoading(true);
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  // Fetch gallery snapshots for search view when query is empty
+  useEffect(() => {
+    if (activeView === 'search' && !query.trim()) {
+      const fetchGallery = async () => {
+        try {
+          // Reset pagination state
+          setGalleryOffset(0);
+          setHasMoreGallery(true);
+          const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
+          if (data?.screenshots) {
+            setGallerySnapshots(data.screenshots);
+            setGalleryTotal(data.total);
+            setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE && data.screenshots.length < data.total);
+          }
+        } catch (err) {
+          console.error('Failed to fetch gallery:', err);
+        }
+      };
+      fetchGallery();
+    }
+  }, [activeView, query, visibilityFilter]);
+
+  // Load more gallery images for infinite scroll
+  const loadMoreGallery = useCallback(async () => {
+    if (isLoadingMore || !hasMoreGallery || query.trim()) return;
+
+    setIsLoadingMore(true);
+    try {
+      const newOffset = galleryOffset + GALLERY_PAGE_SIZE;
+      const data = await getScreenshots(GALLERY_PAGE_SIZE, newOffset, undefined, undefined, visibilityFilter);
+
+      if (data?.screenshots?.length) {
+        setGallerySnapshots(prev => [...prev, ...data.screenshots]);
+        setGalleryOffset(newOffset);
+        setHasMoreGallery(data.screenshots.length === GALLERY_PAGE_SIZE && gallerySnapshots.length + data.screenshots.length < data.total);
+      } else {
+        setHasMoreGallery(false);
+      }
+    } catch (err) {
+      console.error('Failed to load more gallery:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMoreGallery, galleryOffset, visibilityFilter, query, gallerySnapshots.length]);
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    if (activeView !== 'search' || query.trim()) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreGallery && !isLoadingMore) {
+          loadMoreGallery();
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [activeView, query, hasMoreGallery, isLoadingMore, loadMoreGallery]);
 
   // Auto-sync when user starts searching (to load model)
   useEffect(() => {
@@ -147,7 +278,7 @@ export default function Home() {
       setIsSearching(true);
       try {
         const startTime = performance.now();
-        const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate);
+        const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
         setSearchResults(data.results);
         setSearchTime(performance.now() - startTime);
       } catch (err) {
@@ -159,12 +290,13 @@ export default function Home() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel]);
+  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel, visibilityFilter]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (selectedImage) setSelectedImage(null);
+        else if (selection.selectedIds.size > 0) selection.clearSelection();
         else if (query) setQuery('');
         return;
       }
@@ -176,6 +308,30 @@ export default function Home() {
       if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+      // Cmd/Ctrl+A: Select all visible items
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        selection.selectAll();
+        return;
+      }
+      // Cmd/Ctrl+Shift+I: Toggle incognito (15 min default)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'i') {
+        e.preventDefault();
+        handleIncognitoToggle(incognitoStatus.active ? 0 : 15);
+        return;
+      }
+      // Delete/Backspace: Delete selected (with confirmation)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selection.selectedIds.size > 0 && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        setShowDeleteConfirm(true);
+        return;
+      }
+      // H: Hide selected (with confirmation)
+      if (e.key === 'h' && selection.selectedIds.size > 0 && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        setShowHideConfirm(true);
         return;
       }
       if (activeView === 'timeline' && !selectedImage && document.activeElement?.tagName !== 'INPUT') {
@@ -200,7 +356,7 @@ export default function Home() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeView, selectedImage, query, totalSnapshots]);
+  }, [activeView, selectedImage, query, totalSnapshots, selection, incognitoStatus.active]);
 
   const handleRecordingToggle = async () => {
     try {
@@ -216,11 +372,159 @@ export default function Home() {
     }
   };
 
+  // Incognito handlers
+  const handleIncognitoToggle = async (durationMinutes: number) => {
+    setIsIncognitoLoading(true);
+    try {
+      if (durationMinutes === 0) {
+        await stopIncognitoMode();
+      } else {
+        await setIncognitoMode(durationMinutes);
+      }
+      const status = await getIncognitoStatus();
+      setIncognitoStatus(status);
+    } catch (err) {
+      console.error('Failed to toggle incognito:', err);
+    } finally {
+      setIsIncognitoLoading(false);
+    }
+  };
+
+  // Bulk operation handlers
+  const handleBulkDelete = async () => {
+    setIsBulkOperationLoading(true);
+    try {
+      const ids = Array.from(selection.selectedIds);
+      await bulkDeleteScreenshots(ids);
+      selection.clearSelection();
+      // Refresh data
+      await fetchData();
+      if (activeView === 'search') {
+        if (query.trim()) {
+          // Re-query search to refresh results
+          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+          setSearchResults(data?.results || []);
+        } else {
+          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+          if (data?.screenshots) {
+            setGallerySnapshots(data.screenshots);
+            setGalleryTotal(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete screenshots:', err);
+    } finally {
+      setIsBulkOperationLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleBulkHide = async () => {
+    setIsBulkOperationLoading(true);
+    try {
+      const ids = Array.from(selection.selectedIds);
+      await bulkHideScreenshots(ids);
+      selection.clearSelection();
+      // Refresh data
+      await fetchData();
+      if (activeView === 'search') {
+        if (query.trim()) {
+          // Re-query search to refresh results
+          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+          setSearchResults(data?.results || []);
+        } else {
+          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+          if (data?.screenshots) {
+            setGallerySnapshots(data.screenshots);
+            setGalleryTotal(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to hide screenshots:', err);
+    } finally {
+      setIsBulkOperationLoading(false);
+      setShowHideConfirm(false);
+    }
+  };
+
+  const handleBulkUnhide = async () => {
+    setIsBulkOperationLoading(true);
+    try {
+      const ids = Array.from(selection.selectedIds);
+      await bulkUnhideScreenshots(ids);
+      selection.clearSelection();
+      // Refresh data
+      await fetchData();
+      if (activeView === 'search') {
+        if (query.trim()) {
+          // Re-query search to refresh results
+          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+          setSearchResults(data?.results || []);
+        } else {
+          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+          if (data?.screenshots) {
+            setGallerySnapshots(data.screenshots);
+            setGalleryTotal(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to unhide screenshots:', err);
+    } finally {
+      setIsBulkOperationLoading(false);
+    }
+  };
+
+  // Toggle visibility handler for 'all' view - inverts visibility of each selected item
+  const handleToggleVisibility = async () => {
+    setIsBulkOperationLoading(true);
+    try {
+      const ids = Array.from(selection.selectedIds);
+      const selectedItems = currentViewItems.filter(s => ids.includes(s.id));
+
+      // Separate into hidden and visible
+      const hiddenIds = selectedItems.filter(s => s.is_hidden).map(s => s.id);
+      const visibleIds = selectedItems.filter(s => !s.is_hidden).map(s => s.id);
+
+      // Unhide the hidden ones, hide the visible ones
+      const promises = [];
+      if (hiddenIds.length > 0) promises.push(bulkUnhideScreenshots(hiddenIds));
+      if (visibleIds.length > 0) promises.push(bulkHideScreenshots(visibleIds));
+      await Promise.all(promises);
+
+      selection.clearSelection();
+      // Refresh data
+      await fetchData();
+      if (activeView === 'search') {
+        if (query.trim()) {
+          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+          setSearchResults(data?.results || []);
+        } else {
+          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+          if (data?.screenshots) {
+            setGallerySnapshots(data.screenshots);
+            setGalleryTotal(data.total);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle visibility:', err);
+    } finally {
+      setIsBulkOperationLoading(false);
+    }
+  };
+
   const handleDatePreset = useCallback((preset: string, save = true) => {
     setDatePreset(preset);
     if (save) {
       localStorage.setItem(STORAGE_KEYS.DATE_PRESET, preset);
     }
+
+    // Always clear end date for all presets - prevents stale endDate causing issues
+    setSearchEndDate(undefined);
+
     const now = new Date();
     const format = (d: Date) => {
       const y = (d.getFullYear() % 100).toString().padStart(2, '0');
@@ -234,7 +538,6 @@ export default function Home() {
 
     if (preset === 'all') {
       setSearchStartDate(undefined);
-      setSearchEndDate(undefined);
     } else if (preset === '1h') {
       setSearchStartDate(format(new Date(now.getTime() - 60 * 60 * 1000)));
     } else if (preset === '24h') {
@@ -251,6 +554,45 @@ export default function Home() {
       setActiveView('search');
     }
   };
+
+  // Navigate to a specific screenshot in the grid view
+  const navigateToGrid = useCallback(async (screenshot: Screenshot) => {
+    // Switch to search view (grid mode)
+    setActiveView('search');
+    setQuery(''); // Clear search query to show gallery
+
+    // Check if the screenshot is in the current gallery
+    const existingIndex = gallerySnapshots.findIndex(s => s.id === screenshot.id);
+
+    if (existingIndex === -1) {
+      // Need to load gallery with this screenshot
+      try {
+        const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+        if (data?.screenshots) {
+          setGallerySnapshots(data.screenshots);
+          setGalleryTotal(data.total);
+        }
+      } catch (err) {
+        console.error('Failed to load gallery:', err);
+      }
+    }
+
+    // Close lightbox
+    setSelectedImage(null);
+
+    // Set highlighted ID for visual feedback
+    setHighlightedId(screenshot.id);
+
+    // Scroll to the image after a brief delay for render
+    setTimeout(() => {
+      const element = document.getElementById(`grid-item-${screenshot.id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      // Clear highlight after 2 seconds
+      setTimeout(() => setHighlightedId(null), 2000);
+    }, 150);
+  }, [gallerySnapshots, visibilityFilter]);
 
   // Navigate to a specific screenshot in the timeline
   const navigateToTimeline = useCallback(async (screenshot: Screenshot) => {
@@ -366,8 +708,16 @@ export default function Home() {
             </nav>
           </div>
 
-          {/* Right - Recording & Settings */}
+          {/* Right - Incognito, Recording & Settings */}
           <div className="flex items-center gap-3">
+            {/* Incognito Toggle */}
+            <IncognitoIndicator
+              status={incognitoStatus}
+              onSetDuration={handleIncognitoToggle}
+              onStop={() => handleIncognitoToggle(0)}
+              isLoading={isIncognitoLoading}
+            />
+
             {/* Recording Toggle */}
             <button
               onClick={handleRecordingToggle}
@@ -442,22 +792,57 @@ export default function Home() {
             <div className="flex-1 flex items-center justify-center px-4 pb-2 min-h-0">
               {currentSnapshot ? (
                 <div
-                  className={`relative cursor-pointer transition-all duration-300 ${
+                  className={`group relative cursor-pointer transition-all duration-300 ${
                     highlightedId === currentSnapshot.id
+                      ? 'ring-2 ring-[#86efac] ring-offset-2 ring-offset-black rounded'
+                      : selection.isSelected(currentSnapshot.id)
                       ? 'ring-2 ring-[#86efac] ring-offset-2 ring-offset-black rounded'
                       : ''
                   }`}
-                  onClick={() => setSelectedImage(currentSnapshot)}
+                  onClick={(e) => {
+                    // If shift/meta key pressed or already have selections, toggle selection
+                    if (e.shiftKey || e.metaKey || e.ctrlKey || selection.selectedIds.size > 0) {
+                      selection.toggleSelection(currentSnapshot.id, currentIndex, e.shiftKey);
+                    } else {
+                      setSelectedImage(currentSnapshot);
+                    }
+                  }}
                 >
                   <img
                     ref={mainImageRef}
                     src={getImageUrl(currentSnapshot.image_path)}
                     alt=""
                     className={`max-w-full max-h-[calc(100vh-280px)] object-contain rounded border ${
-                      highlightedId === currentSnapshot.id ? 'border-[#86efac]' : 'border-[#1e1e1e]'
+                      highlightedId === currentSnapshot.id || selection.isSelected(currentSnapshot.id)
+                        ? 'border-[#86efac]'
+                        : 'border-[#1e1e1e]'
                     } transition-colors`}
                     onError={(e) => console.error('Image failed to load:', currentSnapshot.image_path)}
                   />
+                  {/* Selection checkbox */}
+                  <div
+                    className={`absolute top-3 left-3 w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                      selection.isSelected(currentSnapshot.id)
+                        ? 'bg-[#86efac] border-[#86efac]'
+                        : 'bg-black/50 border-white/40 opacity-0 group-hover:opacity-100'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selection.toggleSelection(currentSnapshot.id, currentIndex, e.shiftKey);
+                    }}
+                  >
+                    {selection.isSelected(currentSnapshot.id) && (
+                      <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  {/* Hidden indicator */}
+                  {currentSnapshot.is_hidden && (
+                    <div className="absolute top-3 right-3 px-2 py-1 bg-[#7c3aed]/80 rounded text-xs text-white font-medium">
+                      Hidden
+                    </div>
+                  )}
                   {highlightedId === currentSnapshot.id && (
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-[#86efac] text-black text-xs font-medium rounded">
                       From Search
@@ -601,41 +986,119 @@ export default function Home() {
             </div>
 
             {/* Results info */}
-            {query.trim() && (
-              <div className="px-4 py-2 text-xs text-[#555]">
-                {searchResults.length} results
-                {searchTime != null && <span className="ml-2 text-[#444]">{searchTime.toFixed(0)}ms</span>}
-              </div>
-            )}
-
-            {/* Results */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {query.trim() && searchResults.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                  {searchResults.map((snapshot) => (
-                    <div
-                      key={snapshot.id}
-                      onClick={() => setSelectedImage(snapshot)}
-                      className="group relative aspect-video bg-[#0f0f0f] rounded overflow-hidden cursor-pointer border border-[#1e1e1e] hover:border-[#86efac]/50 transition-colors"
-                    >
-                      <img
-                        src={getImageUrl(snapshot.image_path)}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : query.trim() ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-[#555]">No results found</p>
-                </div>
+            <div className="px-4 py-2 text-xs text-[#555]">
+              {query.trim() ? (
+                <>
+                  {searchResults.length} results
+                  {searchTime != null && <span className="ml-2 text-[#444]">{searchTime.toFixed(0)}ms</span>}
+                </>
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-[#555]">Type to search</p>
-                </div>
+                <>{galleryTotal} snapshots (gallery)</>
               )}
+            </div>
+
+            {/* Results / Gallery */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {(() => {
+                const itemsToShow = query.trim() ? searchResults : gallerySnapshots;
+                if (itemsToShow.length > 0) {
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                      {itemsToShow.map((snapshot, index) => {
+                        const isSelected = selection.isSelected(snapshot.id);
+                        const isHighlighted = highlightedId === snapshot.id;
+                        return (
+                          <div
+                            key={snapshot.id}
+                            id={`grid-item-${snapshot.id}`}
+                            onClick={(e) => {
+                              if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                                selection.toggleSelection(snapshot.id, index, e.shiftKey);
+                              } else if (selection.selectedIds.size > 0) {
+                                selection.toggleSelection(snapshot.id, index, false);
+                              } else {
+                                setSelectedImage(snapshot);
+                              }
+                            }}
+                            className={`group relative aspect-video bg-[#0f0f0f] rounded overflow-hidden cursor-pointer border-2 transition-all ${
+                              isHighlighted
+                                ? 'border-[#86efac] ring-2 ring-[#86efac] ring-offset-2 ring-offset-black'
+                                : isSelected
+                                ? 'border-[#86efac] ring-2 ring-[#86efac]/20'
+                                : 'border-[#1e1e1e] hover:border-[#86efac]/50'
+                            }`}
+                          >
+                            <img
+                              src={getImageUrl(snapshot.image_path)}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                            {/* Selection checkbox */}
+                            <div
+                              className={`absolute top-2 left-2 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                isSelected
+                                  ? 'bg-[#86efac] border-[#86efac]'
+                                  : 'bg-black/50 border-white/40 opacity-0 group-hover:opacity-100'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selection.toggleSelection(snapshot.id, index, e.shiftKey);
+                              }}
+                            >
+                              {isSelected && (
+                                <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            {/* Hidden indicator */}
+                            {snapshot.is_hidden && (
+                              <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-[#7c3aed]/80 rounded text-[10px] text-white">
+                                Hidden
+                              </div>
+                            )}
+                            {/* Similarity score for search results */}
+                            {query.trim() && snapshot.similarity !== undefined && (
+                              <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-[#86efac]">
+                                {(snapshot.similarity * 100).toFixed(0)}%
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* Infinite scroll sentinel - only show for gallery (not search results) */}
+                      {!query.trim() && (
+                        <div
+                          ref={loadMoreRef}
+                          className="col-span-full h-16 flex items-center justify-center"
+                        >
+                          {isLoadingMore ? (
+                            <div className="flex items-center gap-2 text-[#555]">
+                              <div className="w-4 h-4 border-2 border-[#333] border-t-[#86efac] rounded-full animate-spin" />
+                              <span className="text-xs">Loading more...</span>
+                            </div>
+                          ) : !hasMoreGallery && gallerySnapshots.length > 0 ? (
+                            <span className="text-xs text-[#555]">All {galleryTotal} snapshots loaded</span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else if (query.trim()) {
+                  return (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-sm text-[#555]">No results found</p>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-sm text-[#555]">No snapshots yet</p>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           </div>
         )}
@@ -719,9 +1182,59 @@ export default function Home() {
               </svg>
               View in Timeline
             </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigateToGrid(selectedImage);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a78bfa]/10 hover:bg-[#a78bfa]/20 text-[#a78bfa] rounded text-xs border border-[#a78bfa]/30 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+              View in Grid
+            </button>
           </div>
         </div>
       )}
+
+      {/* Selection Toolbar */}
+      <SelectionToolbar
+        selectedCount={selection.selectedIds.size}
+        onDelete={() => setShowDeleteConfirm(true)}
+        onHide={() => setShowHideConfirm(true)}
+        onUnhide={handleBulkUnhide}
+        onClear={selection.clearSelection}
+        onSelectAll={selection.selectAll}
+        showUnhide={visibilityFilter === 'hidden_only'}
+        showToggle={visibilityFilter === 'all'}
+        onToggleVisibility={handleToggleVisibility}
+        isLoading={isBulkOperationLoading}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Screenshots"
+        message={`Are you sure you want to permanently delete ${selection.selectedIds.size} screenshot${selection.selectedIds.size === 1 ? '' : 's'}?`}
+        confirmText="Delete"
+        confirmVariant="danger"
+        isLoading={isBulkOperationLoading}
+      />
+
+      {/* Hide Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showHideConfirm}
+        onClose={() => setShowHideConfirm(false)}
+        onConfirm={handleBulkHide}
+        title="Hide Screenshots"
+        message={`Hide ${selection.selectedIds.size} screenshot${selection.selectedIds.size === 1 ? '' : 's'}? They won't appear in normal views but can be restored later.`}
+        confirmText="Hide"
+        confirmVariant="warning"
+        isLoading={isBulkOperationLoading}
+      />
     </div>
   );
 }
