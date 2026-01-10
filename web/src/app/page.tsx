@@ -93,11 +93,13 @@ export default function Home() {
   const GALLERY_PAGE_SIZE = 50;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const loadMoreBeforeRef = useRef<HTMLDivElement>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
 
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const skipGalleryFetchRef = useRef(false); // Skip auto-fetch when navigating to specific position
+  const skipLoadBeforeRef = useRef(false); // Skip "load before" after navigation to prevent immediate trigger
 
   // Selection hook - works with current view's items
   const currentViewItems = activeView === 'search'
@@ -252,12 +254,22 @@ export default function Home() {
 
   // Load more gallery images before current position (for bidirectional scroll)
   const loadMoreGalleryBefore = useCallback(async () => {
+    // Check if we should skip this load (after navigation)
+    if (skipLoadBeforeRef.current) {
+      skipLoadBeforeRef.current = false;
+      return;
+    }
+
     if (isLoadingMoreBefore || !hasMoreGalleryBefore || galleryOffset <= 0 || query.trim()) return;
 
     setIsLoadingMoreBefore(true);
     try {
       const loadCount = Math.min(GALLERY_PAGE_SIZE, galleryOffset);
       const newOffset = galleryOffset - loadCount;
+
+      // Capture scroll position before prepending
+      const container = gridContainerRef.current;
+      const scrollHeightBefore = container?.scrollHeight || 0;
 
       const data = await getScreenshots(loadCount, newOffset, undefined, undefined, visibilityFilter);
 
@@ -266,6 +278,15 @@ export default function Home() {
         setGallerySnapshots(prev => [...data.screenshots, ...prev]);
         setGalleryOffset(newOffset);
         setHasMoreGalleryBefore(newOffset > 0);
+
+        // Restore scroll position after prepending (compensate for new content)
+        if (container) {
+          requestAnimationFrame(() => {
+            const scrollHeightAfter = container.scrollHeight;
+            const heightDiff = scrollHeightAfter - scrollHeightBefore;
+            container.scrollTop += heightDiff;
+          });
+        }
       } else {
         setHasMoreGalleryBefore(false);
       }
@@ -474,8 +495,18 @@ export default function Home() {
       fetchData();
     } catch (err) {
       console.error('Failed to delete screenshots:', err);
-      // Show error to user
-      alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}. Make sure the server is running.`);
+      // Show error to user - handle both Error objects and plain objects
+      let errorMessage = 'Unknown error';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        // Handle cases where error is a plain object (e.g., { detail: "message" })
+        const errObj = err as Record<string, unknown>;
+        errorMessage = (errObj.detail as string) || (errObj.message as string) || JSON.stringify(err);
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      alert(`Failed to delete: ${errorMessage}. Make sure the server is running.`);
     } finally {
       setIsBulkOperationLoading(false);
       setShowDeleteConfirm(false);
@@ -651,6 +682,12 @@ export default function Home() {
         // Allow loading more in both directions
         setHasMoreGallery(startOffset + data.screenshots.length < data.total);
         setHasMoreGalleryBefore(startOffset > 0);
+
+        // Skip the first "load before" trigger since we're navigating to a specific position
+        // The scroll-to-element will position the view correctly
+        if (startOffset > 0) {
+          skipLoadBeforeRef.current = true;
+        }
       }
 
       // Highlight and scroll to target
@@ -1091,7 +1128,7 @@ export default function Home() {
             </div>
 
             {/* Results / Gallery */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div ref={gridContainerRef} className="flex-1 overflow-y-auto p-4">
               {(() => {
                 const itemsToShow = query.trim() ? searchResults : gallerySnapshots;
                 if (itemsToShow.length > 0) {

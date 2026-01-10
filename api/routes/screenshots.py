@@ -180,6 +180,85 @@ async def get_density(
     )
 
 
+# =============================================================================
+# Bulk Operations (MUST come before dynamic /{screenshot_id} routes)
+# =============================================================================
+
+
+@router.delete("/bulk", response_model=BulkOperationResponse)
+async def delete_screenshots_bulk(
+    request: BulkOperationRequest,
+    delete_files: bool = Query(default=True, description="Also delete image files from disk"),
+):
+    """
+    Delete multiple screenshots at once.
+
+    - screenshot_ids: List of screenshot IDs to delete (1-1000)
+    - delete_files: Also delete image files from disk (default: true)
+    """
+    # Get paths and delete from database
+    paths = db.delete_screenshots_bulk(request.screenshot_ids)
+
+    # Delete files if requested
+    deleted_files = 0
+    if delete_files:
+        for path in paths:
+            image_path = Path(path)
+            if image_path.exists():
+                try:
+                    image_path.unlink()
+                    deleted_files += 1
+                except OSError:
+                    pass  # Ignore file deletion errors
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=len(paths),
+        message=f"Deleted {len(paths)} screenshots" + (f" and {deleted_files} files" if delete_files else ""),
+    )
+
+
+@router.post("/bulk/hide", response_model=BulkOperationResponse)
+async def hide_screenshots_bulk(request: BulkOperationRequest):
+    """
+    Hide multiple screenshots at once.
+
+    Hidden screenshots won't appear in normal views but can be restored later.
+
+    - screenshot_ids: List of screenshot IDs to hide (1-1000)
+    """
+    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=True)
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=count,
+        message=f"Hidden {count} screenshots",
+    )
+
+
+@router.post("/bulk/unhide", response_model=BulkOperationResponse)
+async def unhide_screenshots_bulk(request: BulkOperationRequest):
+    """
+    Unhide multiple screenshots at once.
+
+    Restores hidden screenshots to normal visibility.
+
+    - screenshot_ids: List of screenshot IDs to unhide (1-1000)
+    """
+    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=False)
+
+    return BulkOperationResponse(
+        success=True,
+        affected_count=count,
+        message=f"Unhidden {count} screenshots",
+    )
+
+
+# =============================================================================
+# Dynamic Routes (/{screenshot_id} - must come AFTER static routes like /bulk)
+# =============================================================================
+
+
 @router.get("/{screenshot_id}", response_model=Screenshot)
 async def get_screenshot(screenshot_id: int):
     """Get a single screenshot by ID"""
@@ -318,78 +397,4 @@ async def delete_all_screenshots(
         success=True,
         deleted_count=total,
         message=f"Deleted {total} screenshots" + (f" and {deleted_files} files" if delete_files else ""),
-    )
-
-
-# =============================================================================
-# Bulk Operations
-# =============================================================================
-
-
-@router.delete("/bulk", response_model=BulkOperationResponse)
-async def delete_screenshots_bulk(
-    request: BulkOperationRequest,
-    delete_files: bool = Query(default=True, description="Also delete image files from disk"),
-):
-    """
-    Delete multiple screenshots at once.
-
-    - screenshot_ids: List of screenshot IDs to delete (1-1000)
-    - delete_files: Also delete image files from disk (default: true)
-    """
-    # Get paths and delete from database
-    paths = db.delete_screenshots_bulk(request.screenshot_ids)
-
-    # Delete files if requested
-    deleted_files = 0
-    if delete_files:
-        for path in paths:
-            image_path = Path(path)
-            if image_path.exists():
-                try:
-                    image_path.unlink()
-                    deleted_files += 1
-                except OSError:
-                    pass  # Ignore file deletion errors
-
-    return BulkOperationResponse(
-        success=True,
-        affected_count=len(paths),
-        message=f"Deleted {len(paths)} screenshots" + (f" and {deleted_files} files" if delete_files else ""),
-    )
-
-
-@router.post("/bulk/hide", response_model=BulkOperationResponse)
-async def hide_screenshots_bulk(request: BulkOperationRequest):
-    """
-    Hide multiple screenshots at once.
-
-    Hidden screenshots won't appear in normal views but can be restored later.
-
-    - screenshot_ids: List of screenshot IDs to hide (1-1000)
-    """
-    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=True)
-
-    return BulkOperationResponse(
-        success=True,
-        affected_count=count,
-        message=f"Hidden {count} screenshots",
-    )
-
-
-@router.post("/bulk/unhide", response_model=BulkOperationResponse)
-async def unhide_screenshots_bulk(request: BulkOperationRequest):
-    """
-    Unhide multiple screenshots at once.
-
-    Restores hidden screenshots to normal visibility.
-
-    - screenshot_ids: List of screenshot IDs to unhide (1-1000)
-    """
-    count = db.set_screenshots_hidden(request.screenshot_ids, is_hidden=False)
-
-    return BulkOperationResponse(
-        success=True,
-        affected_count=count,
-        message=f"Unhidden {count} screenshots",
     )
