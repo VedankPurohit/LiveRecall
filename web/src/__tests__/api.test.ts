@@ -147,6 +147,7 @@ describe('API Client', () => {
         safe_mode_level: 'low',
         start_date: '2024-01-01',
         end_date: '2024-12-31',
+        visibility: 'visible_only',
       });
     });
 
@@ -300,7 +301,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(data);
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots?limit=50&offset=0',
+        '/api/v1/screenshots?limit=50&offset=0&visibility=visible_only',
         expect.any(Object)
       );
     });
@@ -311,7 +312,7 @@ describe('API Client', () => {
       await getScreenshots(100, 50, '2024-01-01', '2024-12-31');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots?limit=100&offset=50&start_date=2024-01-01&end_date=2024-12-31',
+        '/api/v1/screenshots?limit=100&offset=50&visibility=visible_only&start_date=2024-01-01&end_date=2024-12-31',
         expect.any(Object)
       );
     });
@@ -363,7 +364,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(density);
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots/density?buckets=100',
+        '/api/v1/screenshots/density?buckets=100&visibility=visible_only',
         expect.any(Object)
       );
     });
@@ -374,7 +375,7 @@ describe('API Client', () => {
       await getDensity(50);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/screenshots/density?buckets=50',
+        '/api/v1/screenshots/density?buckets=50&visibility=visible_only',
         expect.any(Object)
       );
     });
