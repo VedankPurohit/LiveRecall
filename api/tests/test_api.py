@@ -445,17 +445,19 @@ class TestSetupEndpoints:
         data = response.json()
         assert data["needs_setup"] is True
 
-    @patch("api.routes.setup.subprocess")
-    @patch("api.routes.setup.sys")
-    def test_reset_permissions_macos(self, mock_sys, mock_subprocess):
-        """Should run tccutil on macOS"""
+    @patch("api.routes.setup.current_platform")
+    def test_reset_permissions_macos(self, mock_platform):
+        """Should run tccutil on macOS (via platform abstraction)"""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from api.routes.setup import router
 
-        mock_sys.platform = "darwin"
-        mock_subprocess.run.return_value.returncode = 0
+        # Mock the platform to simulate macOS behavior
+        mock_platform.reset_screen_permission.return_value = (
+            True,
+            "Screen capture permissions reset.",
+        )
 
         app = FastAPI()
         app.include_router(router)
@@ -465,25 +467,31 @@ class TestSetupEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        mock_subprocess.run.assert_called_once()
+        mock_platform.reset_screen_permission.assert_called_once()
 
-    @patch("api.routes.setup.sys")
-    def test_reset_permissions_non_macos(self, mock_sys):
-        """Should reject on non-macOS platforms"""
+    @patch("api.routes.setup.current_platform")
+    def test_reset_permissions_windows(self, mock_platform):
+        """Should succeed on Windows (no-op via platform abstraction)"""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from api.routes.setup import router
 
-        mock_sys.platform = "linux"
+        # Mock the platform to simulate Windows behavior
+        mock_platform.reset_screen_permission.return_value = (
+            True,
+            "No permission reset needed on Windows.",
+        )
 
         app = FastAPI()
         app.include_router(router)
         client = TestClient(app)
 
         response = client.post("/setup/reset-permissions")
-        assert response.status_code == 400
-        assert "only available on macOS" in response.json()["detail"]
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Windows" in data["message"] or "No permission" in data["message"]
 
     @patch("api.routes.setup.config")
     @patch("api.routes.setup.VERSION", "0.1.2")
