@@ -240,3 +240,58 @@ class TestStats:
 
         stats = mock_db.get_stats()
         assert stats["total_screenshots"] == 0
+
+
+class TestScreenshotOffset:
+    """Test screenshot offset functionality"""
+
+    def test_get_screenshot_offset_basic(self, mock_db, temp_dir):
+        """Should return correct offset for a screenshot"""
+        from PIL import Image
+
+        # Add 5 screenshots with different timestamps
+        ids = []
+        for i in range(5):
+            img = Image.new("RGB", (10, 10))
+            path = temp_dir / f"ss_{i}.jpg"
+            img.save(str(path), "JPEG")
+            ids.append(mock_db.add_screenshot(str(path), f"25010612000{i}"))
+
+        # The most recent (highest timestamp) should have offset 0
+        assert mock_db.get_screenshot_offset(ids[4]) == 0
+        # The oldest should have offset 4
+        assert mock_db.get_screenshot_offset(ids[0]) == 4
+        # Middle one should have offset 2
+        assert mock_db.get_screenshot_offset(ids[2]) == 2
+
+    def test_get_screenshot_offset_visibility_filter(self, mock_db, temp_dir):
+        """Should respect visibility filter"""
+        from PIL import Image
+
+        ids = []
+        for i in range(3):
+            img = Image.new("RGB", (10, 10))
+            path = temp_dir / f"ss_{i}.jpg"
+            img.save(str(path), "JPEG")
+            ids.append(mock_db.add_screenshot(str(path), f"25010612000{i}"))
+
+        # Hide the middle one (ids[1])
+        mock_db.set_screenshots_hidden([ids[1]], True)
+
+        # With visible_only, middle screenshot doesn't count
+        # ids[2] is newest (offset 0), ids[0] is oldest
+        # For ids[0]: only ids[2] is newer AND visible, so offset = 1
+        assert mock_db.get_screenshot_offset(ids[0], "visible_only") == 1
+        # ids[2] is still newest regardless
+        assert mock_db.get_screenshot_offset(ids[2], "visible_only") == 0
+
+        # With hidden_only, only ids[1] is in the list (offset 0 within hidden)
+        assert mock_db.get_screenshot_offset(ids[1], "hidden_only") == 0
+
+        # With 'all', all screenshots count
+        assert mock_db.get_screenshot_offset(ids[0], "all") == 2
+        assert mock_db.get_screenshot_offset(ids[2], "all") == 0
+
+    def test_get_screenshot_offset_not_found(self, mock_db):
+        """Should return None for non-existent screenshot"""
+        assert mock_db.get_screenshot_offset(9999) is None

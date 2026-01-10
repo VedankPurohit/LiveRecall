@@ -26,10 +26,10 @@ from core.database import db
 
 router = APIRouter(prefix="/screenshots", tags=["Screenshots"])
 
-# Type alias for visibility query parameter
+# Type alias for visibility query parameter (description only, default set via = in function)
 VisibilityQuery = Annotated[
     VisibilityFilter,
-    Query(default=VisibilityFilter.VISIBLE_ONLY, description="Filter by visibility"),
+    Query(description="Filter by visibility"),
 ]
 
 

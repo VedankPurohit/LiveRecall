@@ -279,10 +279,10 @@ class Database:
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             if limit:
-                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?"
                 params.extend([limit, offset])
             else:
-                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC"
+                query = f"SELECT * FROM screenshots {where_clause} ORDER BY timestamp DESC, id DESC"
 
             cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
@@ -292,9 +292,9 @@ class Database:
         screenshot_id: int,
         visibility: str = "visible_only",
     ) -> int | None:
-        """Get the offset/position of a screenshot in the sorted list (timestamp DESC).
+        """Get the offset/position of a screenshot in the sorted list (timestamp DESC, id DESC).
 
-        Returns the number of screenshots that come before this one (have higher timestamps).
+        Returns the number of screenshots that come before this one in the sorted order.
         Returns None if screenshot not found.
 
         Args:
@@ -302,26 +302,31 @@ class Database:
             visibility: One of "visible_only", "hidden_only", or "all"
         """
         with self.cursor() as cur:
-            # First get the target screenshot's timestamp
-            cur.execute("SELECT timestamp FROM screenshots WHERE id = ?", [screenshot_id])
+            # First get the target screenshot's timestamp and id
+            cur.execute("SELECT timestamp, id FROM screenshots WHERE id = ?", [screenshot_id])
             row = cur.fetchone()
             if not row:
                 return None
             target_ts = row[0]
+            target_id = row[1]
 
-            # Build visibility filter
-            conditions: list[str] = ["timestamp > ?"]
-            params: list[str | int] = [target_ts]
-
+            # Count screenshots that come BEFORE this one in ORDER BY timestamp DESC, id DESC
+            # A screenshot comes before if:
+            # - timestamp > target_ts, OR
+            # - timestamp = target_ts AND id > target_id
+            vis_condition = ""
             if visibility == "visible_only":
-                conditions.append("(is_hidden = 0 OR is_hidden IS NULL)")
+                vis_condition = "AND (is_hidden = 0 OR is_hidden IS NULL)"
             elif visibility == "hidden_only":
-                conditions.append("is_hidden = 1")
+                vis_condition = "AND is_hidden = 1"
             # "all" - no visibility condition
 
-            where_clause = "WHERE " + " AND ".join(conditions)
-            query = f"SELECT COUNT(*) FROM screenshots {where_clause}"
-            cur.execute(query, params)
+            query = f"""
+                SELECT COUNT(*) FROM screenshots
+                WHERE (timestamp > ? OR (timestamp = ? AND id > ?))
+                {vis_condition}
+            """
+            cur.execute(query, [target_ts, target_ts, target_id])
             return cur.fetchone()[0]
 
     def get_screenshots_count(

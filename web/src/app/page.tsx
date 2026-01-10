@@ -97,6 +97,7 @@ export default function Home() {
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const skipGalleryFetchRef = useRef(false); // Skip auto-fetch when navigating to specific position
 
   // Selection hook - works with current view's items
   const currentViewItems = activeView === 'search'
@@ -201,6 +202,11 @@ export default function Home() {
   // Fetch gallery snapshots for search view when query is empty
   useEffect(() => {
     if (activeView === 'search' && !query.trim()) {
+      // Skip if we're navigating to a specific position (e.g., from View in Grid)
+      if (skipGalleryFetchRef.current) {
+        skipGalleryFetchRef.current = false;
+        return;
+      }
       const fetchGallery = async () => {
         try {
           // Reset pagination state for both directions
@@ -446,7 +452,9 @@ export default function Home() {
     setIsBulkOperationLoading(true);
     try {
       const ids = Array.from(selection.selectedIds);
-      await bulkDeleteScreenshots(ids);
+      console.log('Deleting screenshots:', ids);
+      const result = await bulkDeleteScreenshots(ids);
+      console.log('Delete result:', result);
 
       // Remove deleted items from current view immediately
       const idSet = new Set(ids);
@@ -466,6 +474,8 @@ export default function Home() {
       fetchData();
     } catch (err) {
       console.error('Failed to delete screenshots:', err);
+      // Show error to user
+      alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}. Make sure the server is running.`);
     } finally {
       setIsBulkOperationLoading(false);
       setShowDeleteConfirm(false);
@@ -609,6 +619,9 @@ export default function Home() {
 
   // Navigate to a specific screenshot in the grid view
   const navigateToGrid = useCallback(async (screenshot: Screenshot) => {
+    // Set flag to skip the auto-fetch useEffect that would reset to offset 0
+    skipGalleryFetchRef.current = true;
+
     // Switch to search view (grid mode)
     setActiveView('search');
     setQuery(''); // Clear search query to show gallery
@@ -626,6 +639,12 @@ export default function Home() {
       const data = await getScreenshots(GALLERY_PAGE_SIZE * 2, startOffset, undefined, undefined, visibilityFilter);
 
       if (data?.screenshots) {
+        // Verify target is in loaded data
+        const targetInData = data.screenshots.some(s => s.id === screenshot.id);
+        if (!targetInData) {
+          console.warn(`Target screenshot ${screenshot.id} not found in loaded data. Offset: ${targetOffset}, StartOffset: ${startOffset}, Loaded: ${data.screenshots.length}`);
+        }
+
         setGallerySnapshots(data.screenshots);
         setGalleryTotal(data.total);
         setGalleryOffset(startOffset);
@@ -637,13 +656,18 @@ export default function Home() {
       // Highlight and scroll to target
       setHighlightedId(screenshot.id);
 
-      setTimeout(() => {
-        const element = document.getElementById(`grid-item-${screenshot.id}`);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        setTimeout(() => setHighlightedId(null), 2000);
-      }, 150);
+      // Use requestAnimationFrame to ensure React has rendered, then scroll
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const element = document.getElementById(`grid-item-${screenshot.id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            console.warn(`Could not find element grid-item-${screenshot.id} to scroll to`);
+          }
+          setTimeout(() => setHighlightedId(null), 2000);
+        }, 100);
+      });
 
     } catch (err) {
       console.error('Failed to navigate to grid:', err);
