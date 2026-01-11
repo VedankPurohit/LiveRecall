@@ -1110,7 +1110,7 @@ class Database:
                     limit=limit * 2,
                     visibility=visibility,
                 )
-                results_by_source["text_fts"] = [(r["id"], r.get("fts_rank", 0)) for r in fts_results]
+                results_by_source["text_fts"] = [(r["id"], r.get("relevance_score", 0)) for r in fts_results]
             except Exception as e:
                 print(f"FTS search error: {e}")
 

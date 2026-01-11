@@ -120,7 +120,7 @@ async def search_screenshots(request: SearchRequest):
             )
             # Normalize response format
             for r in results:
-                r["similarity"] = r.get("fts_rank", 0.5)  # FTS rank as similarity
+                r["similarity"] = r.get("relevance_score", 0.5)  # BM25 score as similarity
                 r["match_sources"] = ["text_fts"]
 
         elif search_mode == "text_semantic":
