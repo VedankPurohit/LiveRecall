@@ -1,17 +1,27 @@
 """
 Sync API Routes
-Process unsynced screenshots with CLIP embeddings
+Process unsynced screenshots with CLIP embeddings + OCR text extraction.
+
+The sync process has multiple phases:
+1. CLIP image embeddings (for visual semantic search)
+2. OCR text extraction (for exact/fuzzy text search)
+3. BGE text embeddings (for text semantic search)
 """
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.schemas import (
+    AllModelsStatus,
+    EnhancedSyncStatus,
     ModelStatus,
+    OCRConfig,
+    OCRStats,
     SuccessResponse,
     SyncStartRequest,
     SyncStartResponse,
     SyncStatus,
 )
+from core.config import config
 from core.database import db
 from core.embeddings import (
     get_model_status,
@@ -35,6 +45,21 @@ def progress_to_status(progress: SyncProgress) -> SyncStatus:
     )
 
 
+def progress_to_enhanced_status(progress: SyncProgress) -> EnhancedSyncStatus:
+    """Convert internal progress to enhanced API schema with OCR tracking"""
+    return EnhancedSyncStatus(
+        is_syncing=progress.is_running,
+        total=progress.total,
+        processed=progress.processed,
+        errors=progress.errors,
+        progress_percent=progress.percent,
+        current_phase=progress.current_phase,
+        embeddings_done=progress.embeddings_done,
+        ocr_done=progress.ocr_done,
+        text_embeddings_done=progress.text_embeddings_done,
+    )
+
+
 @router.get("", response_model=SyncStatus)
 @router.get("/status", response_model=SyncStatus)
 async def get_sync_status():
@@ -50,8 +75,10 @@ async def start_sync(
     """
     Start syncing unsynced screenshots.
 
-    This loads the CLIP model (if not already loaded) and generates
-    embeddings for screenshots that don't have them yet.
+    This processes screenshots in multiple phases:
+    1. CLIP image embeddings (for visual semantic search)
+    2. OCR text extraction (for exact/fuzzy text search)
+    3. BGE text embeddings (for text semantic search)
 
     The sync runs in the background - use /sync/status to monitor progress.
     """
@@ -62,9 +89,12 @@ async def start_sync(
             unsynced_count=db.get_unsynced_count(),
         )
 
+    # Check both CLIP unsynced AND OCR pending
     unsynced_count = db.get_unsynced_count()
+    ocr_pending = db.get_ocr_pending_count() if config.ocr.enabled else 0
+    total_pending = unsynced_count + ocr_pending
 
-    if unsynced_count == 0:
+    if total_pending == 0:
         return SyncStartResponse(
             success=True,
             message="No screenshots to sync",
@@ -78,8 +108,8 @@ async def start_sync(
 
     return SyncStartResponse(
         success=True,
-        message=f"Sync started for {unsynced_count} screenshots",
-        unsynced_count=unsynced_count,
+        message=f"Sync started for {total_pending} screenshots ({unsynced_count} new, {ocr_pending} OCR pending)",
+        unsynced_count=total_pending,
     )
 
 
@@ -165,4 +195,143 @@ async def set_auto_unload(seconds: int):
     return SuccessResponse(
         success=True,
         message=f"Auto-unload set to {seconds} seconds",
+    )
+
+
+# =============================================================================
+# OCR Management
+# =============================================================================
+
+
+@router.get("/enhanced", response_model=EnhancedSyncStatus)
+async def get_enhanced_sync_status():
+    """Get detailed sync status including OCR phase information"""
+    return progress_to_enhanced_status(processor_service.progress)
+
+
+@router.get("/ocr/status", response_model=OCRStats)
+async def get_ocr_status():
+    """Get OCR processing statistics
+
+    Returns counts of screenshots with/without OCR, average confidence, etc.
+    """
+    stats = db.get_ocr_stats()
+    return OCRStats(
+        total_screenshots=stats["total_screenshots"],
+        with_ocr=stats["with_ocr"],
+        without_ocr=stats["without_ocr"],
+        with_text=stats["with_text"],
+        avg_confidence=stats["avg_confidence"],
+    )
+
+
+@router.get("/ocr/config", response_model=OCRConfig)
+async def get_ocr_config():
+    """Get current OCR configuration"""
+    return OCRConfig(
+        enabled=config.ocr.enabled,
+        provider=config.ocr.provider,
+    )
+
+
+@router.put("/ocr/config", response_model=SuccessResponse)
+async def update_ocr_config(new_config: OCRConfig):
+    """Update OCR configuration
+
+    Note: Changing provider may require reprocessing all screenshots.
+    Use /sync/ocr/recompute to regenerate OCR data.
+    """
+    config.ocr.enabled = new_config.enabled
+    config.ocr.provider = new_config.provider
+    config.save()
+
+    return SuccessResponse(
+        success=True,
+        message=f"OCR config updated: enabled={new_config.enabled}, provider={new_config.provider}",
+    )
+
+
+@router.post("/ocr/recompute", response_model=SyncStartResponse)
+async def recompute_ocr():
+    """Recompute OCR for all screenshots
+
+    Use this after changing OCR or text embedding models to regenerate
+    all text data. This will:
+    1. Clear existing OCR data
+    2. Re-run OCR on all screenshots
+    3. Regenerate text chunks and embeddings
+
+    Warning: This may take a long time for large databases.
+    """
+    if processor_service.is_running:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot recompute while sync is running",
+        )
+
+    if not config.ocr.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="OCR is disabled. Enable it in settings first.",
+        )
+
+    total = db.get_screenshot_count()
+
+    # Start recompute in background
+    import threading
+
+    def run_recompute():
+        processor_service.recompute_ocr()
+
+    thread = threading.Thread(target=run_recompute, daemon=True)
+    thread.start()
+
+    return SyncStartResponse(
+        success=True,
+        message=f"OCR recompute started for {total} screenshots",
+        unsynced_count=total,
+    )
+
+
+@router.get("/models", response_model=AllModelsStatus)
+async def get_all_models_status():
+    """Get status of all ML models (CLIP, BGE, OCR)"""
+    # CLIP status
+    clip_status = get_model_status()
+    clip = ModelStatus(
+        loaded=clip_status["loaded"],
+        device=clip_status["device"],
+        idle_seconds=clip_status["idle_seconds"],
+        auto_unload_seconds=clip_status["auto_unload_seconds"],
+    )
+
+    # Text embedding status (lazy import)
+    text_emb = None
+    try:
+        from core.text_embeddings import text_embedding_service
+
+        text_status = text_embedding_service.get_model_status()
+        text_emb = ModelStatus(
+            loaded=text_status["loaded"],
+            device=text_status["device"],
+            idle_seconds=text_status["idle_seconds"],
+            auto_unload_seconds=text_status["auto_unload_seconds"],
+        )
+    except Exception:
+        pass
+
+    # OCR status
+    ocr_status = "not_available"
+    try:
+        from core.ocr import ocr_service
+
+        if ocr_service.is_available():
+            ocr_status = ocr_service.get_provider_name()
+    except Exception:
+        pass
+
+    return AllModelsStatus(
+        clip=clip,
+        text_embedding=text_emb,
+        ocr=ocr_status,
     )

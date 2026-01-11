@@ -27,6 +27,12 @@ dependencies = [
     "torch==2.3.0",
     "transformers>=4.55.2",
 
+    # OCR (lazy loaded, platform-specific)
+    # Apple Vision via ocrmac (macOS only, uses native Vision framework)
+    "ocrmac>=1.0.0; sys_platform == 'darwin'",
+    # Tesseract OCR (cross-platform fallback)
+    "pytesseract>=0.3.10",
+
     # API
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",

@@ -1,6 +1,15 @@
 """
 Search API Routes
-Semantic search for screenshots
+Semantic search for screenshots with hybrid search support.
+
+Search modes:
+- auto: Hybrid search combining image + text (default, recommended)
+- image: CLIP image embedding search only
+- text_fuzzy: FTS5 trigram text search only
+- text_semantic: BGE text embedding search only
+
+The hybrid search uses Reciprocal Rank Fusion (RRF) to combine results
+from multiple sources.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -27,15 +36,18 @@ async def search_screenshots(request: SearchRequest):
     """
     Search for screenshots using natural language.
 
-    This loads the CLIP model (if not already loaded) and performs
-    semantic similarity search against all synced screenshots.
+    Supports multiple search modes:
+    - auto: Hybrid search combining image + text (recommended)
+    - image: CLIP semantic search only
+    - text_fuzzy: FTS5 trigram text search only
+    - text_semantic: BGE text embedding search only
 
     Optionally filter by date range using start_date and end_date.
 
     Examples:
-    - "blue shirt on amazon"
-    - "error message in terminal"
-    - "video call with team"
+    - "blue shirt on amazon" (visual search)
+    - "error: connection refused" (text search)
+    - "video call with team" (hybrid search)
     """
     # Check if we have any synced screenshots
     stats = db.get_stats()
@@ -45,37 +57,93 @@ async def search_screenshots(request: SearchRequest):
             detail="No synced screenshots. Run sync first to generate embeddings.",
         )
 
-    # Generate query embedding
+    search_mode = request.search_mode.lower()
+
+    # Generate embeddings based on search mode
+    image_embedding = None
+    text_embedding = None
+
     try:
-        if request.safe_mode:
-            embedding = get_safe_search_embedding(
-                text=request.query,
-                safe_mode_level=request.safe_mode_level.value,
-            )
-        elif request.negative_texts:
-            embedding = get_combined_embedding(
-                base_text=request.query,
-                negative_texts=request.negative_texts,
-                negative_weight=request.negative_weight,
-            )
-        else:
-            embedding = get_text_embedding(request.query)
+        # CLIP image embedding (for image and auto modes)
+        if search_mode in ("auto", "image"):
+            if request.safe_mode:
+                image_embedding = get_safe_search_embedding(
+                    text=request.query,
+                    safe_mode_level=request.safe_mode_level.value,
+                )
+            elif request.negative_texts:
+                image_embedding = get_combined_embedding(
+                    base_text=request.query,
+                    negative_texts=request.negative_texts,
+                    negative_weight=request.negative_weight,
+                )
+            else:
+                image_embedding = get_text_embedding(request.query)
+
+        # BGE text embedding (for text_semantic and auto modes)
+        if search_mode in ("auto", "text_semantic"):
+            # Lazy import to avoid loading text model if not needed
+            from core.text_embeddings import text_embedding_service
+
+            text_embedding = text_embedding_service.get_query_embedding(request.query)
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error generating embedding: {str(e)}",
         ) from e
 
-    # Search database - get more results than needed if filtering by date
+    # Search based on mode
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
 
     try:
-        results = db.search_similar(
-            embedding,
-            limit=search_limit,
-            similarity_metric=config.similarity_metric,
-            visibility=request.visibility.value,
-        )
+        if search_mode == "image":
+            # Pure image search (legacy behavior)
+            results = db.search_similar(
+                image_embedding,
+                limit=search_limit,
+                similarity_metric=config.similarity_metric,
+                visibility=request.visibility.value,
+            )
+            # Add empty match_sources for compatibility
+            for r in results:
+                r["match_sources"] = ["image"]
+
+        elif search_mode == "text_fuzzy":
+            # Pure FTS5 text search
+            results = db.search_ocr_fts(
+                query=request.query,
+                limit=search_limit,
+                visibility=request.visibility.value,
+            )
+            # Normalize response format
+            for r in results:
+                r["similarity"] = r.get("fts_rank", 0.5)  # FTS rank as similarity
+                r["match_sources"] = ["text_fts"]
+
+        elif search_mode == "text_semantic":
+            # Pure BGE text semantic search
+            results = db.search_text_embeddings(
+                query_embedding=text_embedding,
+                limit=search_limit,
+                visibility=request.visibility.value,
+            )
+            # Normalize response format
+            for r in results:
+                r["similarity"] = r.get("text_similarity", 0)
+                r["match_sources"] = ["text_semantic_small", "text_semantic_large"]
+
+        else:
+            # Hybrid search (auto mode - default)
+            results = db.search_hybrid(
+                query=request.query,
+                image_embedding=image_embedding,
+                text_embedding=text_embedding,
+                mode="auto",
+                limit=search_limit,
+                visibility=request.visibility.value,
+            )
+
     except Exception as e:
         raise HTTPException(
             status_code=500,

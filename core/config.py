@@ -56,6 +56,69 @@ class CompressionSettings:
     quality: int = 85  # JPEG quality for compressed images
 
 
+# =============================================================================
+# OCR SETTINGS
+# =============================================================================
+
+
+@dataclass
+class OCRSettings:
+    """OCR text extraction settings
+
+    Provider options:
+    - "auto": Auto-select best for platform (recommended)
+    - "apple_vision": macOS native Vision framework (fast, zero memory)
+    - "tesseract": Cross-platform Tesseract OCR (lightweight, stable)
+
+    Future provider options (better accuracy, more memory):
+    - "paddleocr": PP-OCRv4 (pip install paddleocr paddlepaddle)
+    - "doctr": docTR (pip install python-doctr[torch])
+    - "easyocr": EasyOCR (pip install easyocr) - heavy, 1-2GB
+
+    To switch providers: Change provider setting, then call ocr_service.recompute_all()
+    """
+
+    enabled: bool = True  # OCR enabled by default
+    provider: str = "auto"  # "auto", "apple_vision", "tesseract"
+
+
+@dataclass
+class TextEmbeddingSettings:
+    """Text embedding model settings for semantic search
+
+    Model options (sentence-transformers):
+    - "BAAI/bge-small-en-v1.5": 384-dim, 130MB, MTEB 62.2 (default, good balance)
+    - "all-MiniLM-L6-v2": 384-dim, 80MB, MTEB 56.3 (lighter)
+    - "thenlper/gte-small": 384-dim, 70MB (lightest)
+    - "BAAI/bge-base-en-v1.5": 768-dim, 440MB, MTEB 63.5 (higher accuracy)
+    - "all-mpnet-base-v2": 768-dim, 420MB (higher accuracy)
+
+    WARNING: Changing to a model with different dimensions requires:
+    1. Update dimensions here
+    2. Recreate vector tables (call text_embedding_service.recompute_all())
+    """
+
+    model: str = "BAAI/bge-small-en-v1.5"
+    dimensions: int = 384  # Must match model output dimensions
+
+
+@dataclass
+class ChunkingSettings:
+    """Text chunking settings for semantic search
+
+    Dual chunking strategy:
+    - Small chunks: Precise matching, good for short specific queries
+    - Large chunks: Better context, good for conceptual queries
+
+    Both sizes are searched and combined using RRF (Reciprocal Rank Fusion).
+    """
+
+    small_size: int = 512  # tokens (~2000 chars)
+    small_overlap: int = 50  # tokens (~200 chars)
+    large_size: int = 2048  # tokens (~8000 chars)
+    large_overlap: int = 200  # tokens (~800 chars)
+
+
 @dataclass
 class CaptureSettings:
     """Screen capture settings"""
@@ -106,6 +169,9 @@ class Config:
     capture: CaptureSettings = field(default_factory=CaptureSettings)
     compression: CompressionSettings = field(default_factory=CompressionSettings)
     incognito: IncognitoSettings = field(default_factory=IncognitoSettings)
+    ocr: OCRSettings = field(default_factory=OCRSettings)
+    text_embedding: TextEmbeddingSettings = field(default_factory=TextEmbeddingSettings)
+    chunking: ChunkingSettings = field(default_factory=ChunkingSettings)
     encryption_enabled: bool = True
     safe_mode_enabled: bool = True
     safe_mode_level: str = "mid"  # low, mid, high
@@ -184,6 +250,20 @@ class Config:
                 "active": self.incognito.active,
                 "until": self.incognito.until,
             },
+            "ocr": {
+                "enabled": self.ocr.enabled,
+                "provider": self.ocr.provider,
+            },
+            "text_embedding": {
+                "model": self.text_embedding.model,
+                "dimensions": self.text_embedding.dimensions,
+            },
+            "chunking": {
+                "small_size": self.chunking.small_size,
+                "small_overlap": self.chunking.small_overlap,
+                "large_size": self.chunking.large_size,
+                "large_overlap": self.chunking.large_overlap,
+            },
             "encryption_enabled": self.encryption_enabled,
             "safe_mode_enabled": self.safe_mode_enabled,
             "safe_mode_level": self.safe_mode_level,
@@ -224,6 +304,26 @@ class Config:
                 inc = data["incognito"]
                 self.incognito.active = inc.get("active", self.incognito.active)
                 self.incognito.until = inc.get("until", self.incognito.until)
+
+            # Load OCR settings
+            if "ocr" in data:
+                ocr = data["ocr"]
+                self.ocr.enabled = ocr.get("enabled", self.ocr.enabled)
+                self.ocr.provider = ocr.get("provider", self.ocr.provider)
+
+            # Load text embedding settings
+            if "text_embedding" in data:
+                te = data["text_embedding"]
+                self.text_embedding.model = te.get("model", self.text_embedding.model)
+                self.text_embedding.dimensions = te.get("dimensions", self.text_embedding.dimensions)
+
+            # Load chunking settings
+            if "chunking" in data:
+                chunk = data["chunking"]
+                self.chunking.small_size = chunk.get("small_size", self.chunking.small_size)
+                self.chunking.small_overlap = chunk.get("small_overlap", self.chunking.small_overlap)
+                self.chunking.large_size = chunk.get("large_size", self.chunking.large_size)
+                self.chunking.large_overlap = chunk.get("large_overlap", self.chunking.large_overlap)
 
             # Load other settings
             self.encryption_enabled = data.get("encryption_enabled", self.encryption_enabled)

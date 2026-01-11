@@ -166,10 +166,14 @@ class SyncStartResponse(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Search request"""
+    """Search request with mode selection"""
 
     query: str = Field(..., min_length=1, max_length=500)
     limit: int = Field(default=20, ge=1, le=100)
+    search_mode: str = Field(
+        default="auto",
+        description="Search mode: 'auto' (hybrid), 'image', 'text_fuzzy', 'text_semantic'",
+    )
     safe_mode: bool = Field(default=False)  # Off by default for personal recall app
     safe_mode_level: SafeModeLevel = Field(default=SafeModeLevel.MID)
     negative_texts: list[str] | None = Field(default=None)
@@ -183,6 +187,7 @@ class SearchRequest(BaseModel):
             "example": {
                 "query": "blue shirt on website",
                 "limit": 20,
+                "search_mode": "auto",
                 "safe_mode": True,
                 "safe_mode_level": "mid",
                 "start_date": "251201000000",
@@ -469,3 +474,274 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str
     detail: str | None = None
+
+
+# =============================================================================
+# OCR Types
+# =============================================================================
+
+
+class OCRResult(BaseModel):
+    """Result from OCR text extraction"""
+
+    text: str = Field(description="Extracted text (may be empty)")
+    confidence: float | None = Field(default=None, description="Average confidence 0-1")
+    word_count: int = Field(default=0, description="Number of words extracted")
+    language: str = Field(default="en", description="Detected language")
+
+
+class ChunkInfo(BaseModel):
+    """A single text chunk with position info"""
+
+    text: str
+    start_char: int
+    end_char: int
+    index: int
+
+
+class ChunkedText(BaseModel):
+    """Result of dual-size chunking"""
+
+    small: list[ChunkInfo] = Field(description="Small chunks (512 tokens)")
+    large: list[ChunkInfo] = Field(description="Large chunks (2048 tokens)")
+
+
+class OCRStats(BaseModel):
+    """OCR processing statistics"""
+
+    total_screenshots: int
+    with_ocr: int = Field(description="Screenshots with OCR processed")
+    without_ocr: int = Field(description="Screenshots pending OCR")
+    with_text: int = Field(description="Screenshots with non-empty text")
+    avg_confidence: float | None = Field(description="Average OCR confidence")
+
+
+# =============================================================================
+# Search Types
+# =============================================================================
+
+
+class SearchMode(str, Enum):
+    """Available search modes"""
+
+    AUTO = "auto"  # Hybrid - combines all methods (default)
+    IMAGE = "image"  # CLIP image semantic search only
+    TEXT_FUZZY = "text_fuzzy"  # FTS5 trigram text search only
+    TEXT_SEMANTIC = "text_semantic"  # BGE text embedding search only
+
+
+class MatchSource(str, Enum):
+    """Source that contributed to a search match"""
+
+    IMAGE = "image"  # CLIP image similarity
+    TEXT_FTS = "text_fts"  # FTS5 fuzzy text match
+    TEXT_SEMANTIC_SMALL = "text_semantic_small"  # BGE small chunk match
+    TEXT_SEMANTIC_LARGE = "text_semantic_large"  # BGE large chunk match
+
+
+class EnhancedSearchResult(BaseModel):
+    """Search result with OCR information"""
+
+    id: int
+    image_path: str
+    timestamp: str
+    similarity: float = Field(description="Combined similarity score 0-1")
+    image_url: str = Field(description="URL to fetch the image")
+    match_sources: list[MatchSource] = Field(
+        default_factory=list,
+        description="Which search methods matched this result",
+    )
+    ocr_snippet: str | None = Field(
+        default=None,
+        description="Highlighted text snippet if text search matched",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": 42,
+                "image_path": "/path/to/screenshot.jpg",
+                "timestamp": "251206143022",
+                "similarity": 0.89,
+                "image_url": "/api/v1/screenshots/42/image",
+                "match_sources": ["image", "text_fts"],
+                "ocr_snippet": "...searched **term** found here...",
+            }
+        }
+
+
+# =============================================================================
+# Model Download Types
+# =============================================================================
+
+
+class ModelEventType(str, Enum):
+    """Types of model-related events for SSE"""
+
+    DOWNLOAD_STARTED = "download_started"
+    DOWNLOAD_PROGRESS = "download_progress"
+    DOWNLOAD_COMPLETE = "download_complete"
+    LOADING = "loading"
+    READY = "ready"
+    ERROR = "error"
+
+
+class ModelType(str, Enum):
+    """Types of ML models used"""
+
+    CLIP = "clip"
+    TEXT_EMBEDDING = "text_embedding"
+    OCR = "ocr"
+
+
+class ModelEvent(BaseModel):
+    """SSE event for model download/loading progress"""
+
+    event: ModelEventType
+    model: ModelType
+    progress: float | None = Field(default=None, ge=0, le=100, description="Download progress 0-100")
+    size_mb: int | None = Field(default=None, description="Total size in MB")
+    message: str | None = Field(default=None, description="Status message")
+
+
+class AllModelsStatus(BaseModel):
+    """Status of all ML models"""
+
+    clip: ModelStatus
+    text_embedding: ModelStatus | None = Field(
+        default=None,
+        description="Text embedding model status (BGE)",
+    )
+    ocr: str = Field(
+        default="ready",
+        description="OCR status: 'ready', 'not_available', provider name",
+    )
+
+
+# =============================================================================
+# Enhanced Sync Types
+# =============================================================================
+
+
+class EnhancedSyncStatus(BaseModel):
+    """Sync status with OCR tracking"""
+
+    is_syncing: bool
+    total: int = Field(description="Total screenshots to process")
+    processed: int = Field(description="Screenshots fully processed")
+    errors: int = Field(description="Number of errors")
+    progress_percent: float = Field(description="Overall progress percentage")
+
+    # Detailed breakdown
+    current_phase: str = Field(
+        default="",
+        description="Current phase: 'embedding', 'ocr', 'text_embedding'",
+    )
+    embeddings_done: int = Field(default=0, description="CLIP embeddings completed")
+    ocr_done: int = Field(default=0, description="OCR extractions completed")
+    text_embeddings_done: int = Field(default=0, description="Text embeddings completed")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "is_syncing": True,
+                "total": 100,
+                "processed": 45,
+                "errors": 2,
+                "progress_percent": 45.0,
+                "current_phase": "ocr",
+                "embeddings_done": 100,
+                "ocr_done": 45,
+                "text_embeddings_done": 40,
+            }
+        }
+
+
+# =============================================================================
+# OCR Config Types
+# =============================================================================
+
+
+class OCRConfig(BaseModel):
+    """OCR configuration settings"""
+
+    enabled: bool = Field(default=True, description="Whether OCR is enabled")
+    provider: str = Field(
+        default="auto",
+        description="OCR provider: 'auto', 'apple_vision', 'tesseract'",
+    )
+
+
+class TextEmbeddingConfig(BaseModel):
+    """Text embedding configuration settings"""
+
+    model: str = Field(
+        default="BAAI/bge-small-en-v1.5",
+        description="Sentence transformer model name",
+    )
+    dimensions: int = Field(default=384, description="Embedding dimensions")
+
+
+class ChunkingConfig(BaseModel):
+    """Text chunking configuration settings"""
+
+    small_size: int = Field(default=512, description="Small chunk size in tokens")
+    small_overlap: int = Field(default=50, description="Small chunk overlap in tokens")
+    large_size: int = Field(default=2048, description="Large chunk size in tokens")
+    large_overlap: int = Field(default=200, description="Large chunk overlap in tokens")
+
+
+# =============================================================================
+# Migration Types
+# =============================================================================
+
+
+class MigrationStatus(BaseModel):
+    """Status of OCR migration for existing screenshots"""
+
+    needs_migration: bool = Field(description="Whether there are screenshots needing OCR")
+    total_screenshots: int = Field(description="Total number of screenshots")
+    screenshots_with_ocr: int = Field(description="Screenshots with OCR completed")
+    screenshots_without_ocr: int = Field(description="Screenshots pending OCR")
+    progress_percent: float = Field(description="Migration progress percentage")
+    estimated_time_minutes: float | None = Field(
+        default=None,
+        description="Estimated time to complete in minutes",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "needs_migration": True,
+                "total_screenshots": 1000,
+                "screenshots_with_ocr": 350,
+                "screenshots_without_ocr": 650,
+                "progress_percent": 35.0,
+                "estimated_time_minutes": 26.0,
+            }
+        }
+
+
+class EnhancedSetupStatus(BaseModel):
+    """Comprehensive setup status including models and migration"""
+
+    # Version info
+    current_version: str
+    last_seen_version: str
+    needs_setup: bool = Field(description="Whether version-based setup is needed")
+
+    # Platform info
+    platform: str = Field(description="Current platform (macos, windows, linux)")
+    needs_permission: bool = Field(description="Whether screen permission is needed")
+
+    # Model status
+    models_ready: bool = Field(description="Whether all required models are ready")
+    clip_status: str = Field(description="CLIP status: 'not_downloaded', 'downloading', 'ready'")
+    text_embedding_status: str = Field(description="Text embedding status: 'not_downloaded', 'downloading', 'ready'")
+    ocr_status: str = Field(description="OCR status: 'ready', 'not_available'")
+
+    # Migration info
+    migration_status: MigrationStatus | None = Field(
+        default=None,
+        description="OCR migration status if applicable",
+    )

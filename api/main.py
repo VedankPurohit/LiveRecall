@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import compression, incognito, recording, screenshots, search, setup, status, sync
+from api.routes import compression, events, incognito, recording, screenshots, search, setup, status, sync
 from core.database import db
 
 
@@ -47,6 +47,17 @@ async def lifespan(app: FastAPI):
     stats = db.get_stats()
     print(f"📁 Database: {db.db_path}")
     print(f"📊 Screenshots: {stats['total_screenshots']} total, {stats['synced']} synced")
+
+    # Auto-start OCR migration if needed (for existing screenshots without OCR)
+    # This does NOT process new screenshots - those still require manual sync
+    from core.config import config
+    from core.processor import processor_service
+
+    if config.ocr.enabled:
+        ocr_pending = db.get_ocr_pending_count()
+        if ocr_pending > 0:
+            print(f"🔄 Starting OCR migration for {ocr_pending} existing screenshots...")
+            processor_service.start_ocr_migration()
 
     yield
 
@@ -122,6 +133,7 @@ app.include_router(screenshots.router, prefix="/api/v1")
 app.include_router(compression.router, prefix="/api/v1")
 app.include_router(incognito.router, prefix="/api/v1")
 app.include_router(setup.router, prefix="/api/v1")
+app.include_router(events.router, prefix="/api/v1")
 
 
 # Serve static web UI if available
@@ -195,4 +207,5 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=8742,
         reload=True,
+        log_level="warning",  # Suppress verbose access logs
     )

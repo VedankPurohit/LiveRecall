@@ -20,7 +20,7 @@ import {
   bulkHideScreenshots,
   bulkUnhideScreenshots,
 } from '@/lib/api';
-import type { Screenshot, SystemStatus, SyncStatus, DensityBucket, IncognitoStatus, VisibilityFilter } from '@/types';
+import type { Screenshot, SystemStatus, SyncStatus, DensityBucket, IncognitoStatus, VisibilityFilter, SearchMode } from '@/types';
 import { useSelection } from '@/hooks/useSelection';
 import { SelectionToolbar } from '@/components/SelectionToolbar';
 import { ConfirmationDialog } from '@/components/ConfirmationDialog';
@@ -62,6 +62,7 @@ export default function Home() {
   const [datePreset, setDatePreset] = useState<string>('all');
   const [safeMode, setSafeMode] = useState(true);
   const [safeModeLevel, setSafeModeLevel] = useState<string>('mid');
+  const [searchMode, setSearchMode] = useState<SearchMode>('auto');
   const [hasTriggeredSync, setHasTriggeredSync] = useState(false);
 
   // Incognito state
@@ -428,7 +429,7 @@ export default function Home() {
       setIsSearching(true);
       try {
         const startTime = performance.now();
-        const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+        const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter, searchMode);
         setSearchResults(data.results);
         setSearchTime(performance.now() - startTime);
       } catch (err) {
@@ -440,7 +441,7 @@ export default function Home() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel, visibilityFilter]);
+  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel, visibilityFilter, searchMode]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -753,7 +754,7 @@ export default function Home() {
         });
       } else if (activeView === 'search') {
         if (query.trim()) {
-          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
+          const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter, searchMode);
           setSearchResults(data?.results || []);
         } else {
           const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
@@ -1270,6 +1271,18 @@ export default function Home() {
                   </select>
                 )}
               </div>
+              {/* Search mode selector */}
+              <select
+                value={searchMode}
+                onChange={(e) => setSearchMode(e.target.value as SearchMode)}
+                className="bg-[#0f0f0f] text-[#8a8a8a] px-2 py-1 rounded border border-[#1e1e1e] text-xs focus:border-[#86efac]/50 focus:outline-none"
+                title="Search mode"
+              >
+                <option value="auto">Auto (Hybrid)</option>
+                <option value="image">Image Only</option>
+                <option value="text_fuzzy">Text (Fuzzy)</option>
+                <option value="text_semantic">Text (Semantic)</option>
+              </select>
             </div>
 
             {/* Results info */}
