@@ -447,8 +447,8 @@ class SetupStatus(BaseModel):
     current_version: str
     last_seen_version: str
     needs_setup: bool
-    needs_permission: bool = True  # Whether platform needs screen permission
-    platform: str = "macos"  # Current platform (macos, windows, linux)
+    needs_permission: bool  # Whether platform needs screen permission
+    platform: str  # Current platform (macos, windows, linux)
 
 
 # =============================================================================

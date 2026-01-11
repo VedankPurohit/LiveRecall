@@ -423,7 +423,9 @@ Examples:
             print(f"  App:  {artifact}")
             if dmg:
                 print(f"  DMG:  {dmg}")
-            print("\nTo install: Open the DMG and drag LiveRecall to Applications")
+                print("\nTo install: Open the DMG and drag LiveRecall to Applications")
+            else:
+                print("\nTo install: Right-click the .app and select Open")
 
         elif system == "Windows":
             # Windows: Create ZIP (always) and installer (optional)
