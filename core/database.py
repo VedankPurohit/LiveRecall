@@ -1231,7 +1231,7 @@ class Database:
         if start > 0:
             snippet += "..."
         snippet += text[start:best_pos]
-        snippet += f"**{text[best_pos:best_pos + len(best_word)]}**"
+        snippet += f"**{text[best_pos : best_pos + len(best_word)]}**"
         snippet += text[best_pos + len(best_word) : end]
         if end < len(text):
             snippet += "..."

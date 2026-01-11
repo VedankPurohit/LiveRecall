@@ -51,7 +51,7 @@ class TesseractOCR:
                 self._pytesseract = pytesseract
             except ImportError as e:
                 raise ImportError(
-                    "pytesseract is required for Tesseract OCR. " "Install it with: pip install pytesseract"
+                    "pytesseract is required for Tesseract OCR. Install it with: pip install pytesseract"
                 ) from e
         return self._pytesseract
 
