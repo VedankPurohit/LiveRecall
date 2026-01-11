@@ -20,7 +20,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ocrmac.ocrmac import OCR as OCRType
+
     from core.ocr import OCRResult
+
+# Module-level singleton for OCR class (following codebase conventions)
+_ocr_class: type[OCRType] | None = None
+
+
+def _get_ocr_class() -> type[OCRType]:
+    """Get the OCR class, loading it if necessary (module-level singleton)"""
+    global _ocr_class
+    if _ocr_class is None:
+        try:
+            from ocrmac.ocrmac import OCR
+
+            _ocr_class = OCR
+        except ImportError as e:
+            raise ImportError("ocrmac is required for Apple Vision OCR. Install it with: pip install ocrmac") from e
+    return _ocr_class
 
 
 class AppleVisionOCR:
@@ -35,20 +53,6 @@ class AppleVisionOCR:
     """
 
     name = "apple_vision"
-
-    def __init__(self):
-        self._ocr = None
-
-    def _get_ocr(self):
-        """Lazy load the ocrmac OCR instance"""
-        if self._ocr is None:
-            try:
-                from ocrmac.ocrmac import OCR
-
-                self._ocr = OCR
-            except ImportError as e:
-                raise ImportError("ocrmac is required for Apple Vision OCR. Install it with: pip install ocrmac") from e
-        return self._ocr
 
     def extract_text(self, image_path: str | Path) -> OCRResult:
         """
@@ -66,7 +70,7 @@ class AppleVisionOCR:
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        OCR = self._get_ocr()
+        OCR = _get_ocr_class()
 
         try:
             # ocrmac returns list of (text, confidence, bbox) tuples
