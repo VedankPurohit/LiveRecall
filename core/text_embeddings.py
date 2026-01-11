@@ -41,8 +41,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", message=".*use_fast.*")
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-import numpy as np
-import torch
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
 
 # Lazy loading state
 _model = None
