@@ -105,10 +105,9 @@ Section "Install" SecInstall
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LiveRecall" "DisplayIcon" "$\"$INSTDIR\LiveRecall.exe$\""
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LiveRecall" "InstallLocation" "$INSTDIR"
 
-    ; Get installed size
+    ; Get installed size (in KB)
     ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-    IntFmt $0 "0x%08X" $0
-    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LiveRecall" "EstimatedSize" "$0"
+    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LiveRecall" "EstimatedSize" $0
 
 SectionEnd
 
