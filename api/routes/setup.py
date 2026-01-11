@@ -156,8 +156,8 @@ async def get_model_status():
         # Check downloaded status (model could be downloaded but not loaded)
         if status.get("loaded") or status.get("downloaded"):
             clip_status = "ready"
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error checking CLIP model status: {e}")
 
     # Text embedding model status
     text_embedding_status = "not_downloaded"
@@ -167,8 +167,8 @@ async def get_model_status():
         status = get_bge_status()
         if status.get("loaded") or status.get("downloaded"):
             text_embedding_status = "ready"
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error checking text embedding model status: {e}")
 
     # OCR status
     ocr_status = "not_available"
@@ -177,8 +177,8 @@ async def get_model_status():
 
         if ocr_service.is_available():
             ocr_status = "ready"
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error checking OCR status: {e}")
 
     return {
         "clip": clip_status,

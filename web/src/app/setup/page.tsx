@@ -43,8 +43,8 @@ interface SyncProgress {
 }
 
 interface EventStatus {
-  clip: { loaded: boolean; downloading: boolean };
-  text_embedding: { loaded: boolean; downloading: boolean };
+  clip: { loaded: boolean; downloading: boolean; downloaded: boolean };
+  text_embedding: { loaded: boolean; downloading: boolean; downloaded: boolean };
   ocr: { available: boolean };
   sync: SyncProgress;
   ocr_stats: { pending: number; completed: number };
@@ -92,8 +92,13 @@ export default function SetupPage() {
 
   // Determine which step we should be on
   const determineStep = useCallback((status: EnhancedSetupStatus, eventStatus: EventStatus | null): SetupStep => {
+    // Check if models are ready (either from enhanced-status or events-status)
+    // The eventStatus.downloaded field provides a more reliable check when models are downloaded but not loaded
+    const clipReady = status.clip_status === 'ready' || eventStatus?.clip?.downloaded;
+    const textReady = status.text_embedding_status === 'ready' || eventStatus?.text_embedding?.downloaded;
+
     // Check if models are downloading or not ready
-    if (status.clip_status !== 'ready' ||
+    if (!clipReady ||
         (eventStatus?.clip?.downloading) ||
         (eventStatus?.text_embedding?.downloading)) {
       return 'models';
@@ -264,7 +269,7 @@ export default function SetupPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#f5f5f5]">CLIP Vision Model</span>
                   <span className="text-[#8a8a8a]">
-                    {status?.clip_status === 'ready' ? 'Ready' :
+                    {(status?.clip_status === 'ready' || eventStatus?.clip?.downloaded) ? 'Ready' :
                      eventStatus?.clip?.downloading ? 'Downloading...' :
                      status?.clip_status === 'downloading' ? 'Downloading...' : 'Pending'}
                   </span>
@@ -272,7 +277,7 @@ export default function SetupPage() {
                 <div className="h-2 bg-[#1e1e1e] rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
-                      status?.clip_status === 'ready'
+                      (status?.clip_status === 'ready' || eventStatus?.clip?.downloaded)
                         ? 'bg-[#86efac] w-full'
                         : 'bg-[#86efac]/50 w-1/3 animate-pulse'
                     }`}
@@ -286,7 +291,7 @@ export default function SetupPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#f5f5f5]">Text Embedding Model</span>
                   <span className="text-[#8a8a8a]">
-                    {status?.text_embedding_status === 'ready' ? 'Ready' :
+                    {(status?.text_embedding_status === 'ready' || eventStatus?.text_embedding?.downloaded) ? 'Ready' :
                      eventStatus?.text_embedding?.downloading ? 'Downloading...' :
                      status?.text_embedding_status === 'downloading' ? 'Downloading...' : 'Pending'}
                   </span>
@@ -294,7 +299,7 @@ export default function SetupPage() {
                 <div className="h-2 bg-[#1e1e1e] rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
-                      status?.text_embedding_status === 'ready'
+                      (status?.text_embedding_status === 'ready' || eventStatus?.text_embedding?.downloaded)
                         ? 'bg-[#86efac] w-full'
                         : 'bg-[#86efac]/50 w-1/4 animate-pulse'
                     }`}
@@ -308,13 +313,13 @@ export default function SetupPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#f5f5f5]">OCR Engine</span>
                   <span className="text-[#8a8a8a]">
-                    {status?.ocr_status === 'ready' ? 'Ready' : 'Not Available'}
+                    {(status?.ocr_status === 'ready' || eventStatus?.ocr?.available) ? 'Ready' : 'Not Available'}
                   </span>
                 </div>
                 <div className="h-2 bg-[#1e1e1e] rounded-full overflow-hidden">
                   <div
                     className={`h-full ${
-                      status?.ocr_status === 'ready' ? 'bg-[#86efac] w-full' : 'bg-[#555] w-full'
+                      (status?.ocr_status === 'ready' || eventStatus?.ocr?.available) ? 'bg-[#86efac] w-full' : 'bg-[#555] w-full'
                     }`}
                   />
                 </div>
@@ -324,7 +329,7 @@ export default function SetupPage() {
               </div>
 
               <div className="text-center">
-                {(status?.clip_status !== 'ready' || status?.text_embedding_status !== 'ready') && (
+                {!(status?.clip_status === 'ready' || eventStatus?.clip?.downloaded) && (
                   <>
                     <div className="w-6 h-6 border-2 border-[#86efac]/30 border-t-[#86efac] rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-xs text-[#555]">

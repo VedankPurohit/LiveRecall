@@ -164,7 +164,12 @@ async def get_all_status():
     This is a polling alternative to SSE for clients that don't support it.
     """
     # CLIP model status
-    clip_status = {"loaded": False, "device": None, "downloading": False}
+    clip_status: dict[str, bool | str | None] = {
+        "loaded": False,
+        "device": None,
+        "downloading": False,
+        "downloaded": False,
+    }
     try:
         from core.embeddings import get_model_status as get_clip_status
 
@@ -173,12 +178,18 @@ async def get_all_status():
             "loaded": status["loaded"],
             "device": status["device"],
             "downloading": False,
+            "downloaded": status.get("downloaded", False),
         }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error getting CLIP status: {e}")
 
     # Text embedding model status
-    text_status = {"loaded": False, "device": None, "downloading": False}
+    text_status: dict[str, bool | str | None] = {
+        "loaded": False,
+        "device": None,
+        "downloading": False,
+        "downloaded": False,
+    }
     try:
         from core.text_embeddings import get_model_status as get_bge_status
 
@@ -187,9 +198,10 @@ async def get_all_status():
             "loaded": status["loaded"],
             "device": status["device"],
             "downloading": False,
+            "downloaded": status.get("downloaded", False),
         }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error getting text embedding status: {e}")
 
     # OCR status
     ocr_status: dict[str, bool | str | None] = {"available": False, "provider": None}
@@ -200,8 +212,8 @@ async def get_all_status():
             "available": ocr_service.is_available(),
             "provider": ocr_service.get_provider_name() if ocr_service.is_available() else None,
         }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error getting OCR status: {e}")
 
     # Sync status
     sync_status = {
@@ -226,8 +238,8 @@ async def get_all_status():
             "ocr_done": progress.ocr_done,
             "text_embeddings_done": progress.text_embeddings_done,
         }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error getting sync status: {e}")
 
     # OCR stats
     ocr_stats = {"pending": 0, "completed": 0}
@@ -237,8 +249,8 @@ async def get_all_status():
             "pending": stats["without_ocr"],
             "completed": stats["with_ocr"],
         }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error getting OCR stats: {e}")
 
     return {
         "clip": clip_status,
