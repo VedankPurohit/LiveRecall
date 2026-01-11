@@ -469,7 +469,6 @@ class ProcessorService:
         print(f"🔄 Recomputing OCR for {total} screenshots...")
 
         # Process all screenshots
-        offset = 0
         batch_size = 10
         while not self._cancel_requested:
             screenshots = db.get_screenshots_without_ocr(limit=batch_size)
@@ -490,8 +489,6 @@ class ProcessorService:
 
                 if self._on_progress:
                     self._on_progress(self._progress)
-
-            offset += batch_size
 
         self._progress.is_running = False
         if self._on_progress:

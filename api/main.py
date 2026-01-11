@@ -54,10 +54,14 @@ async def lifespan(app: FastAPI):
     from core.processor import processor_service
 
     if config.ocr.enabled:
-        ocr_pending = db.get_ocr_pending_count()
-        if ocr_pending > 0:
-            print(f"🔄 Starting OCR migration for {ocr_pending} existing screenshots...")
-            processor_service.start_ocr_migration()
+        try:
+            ocr_pending = db.get_ocr_pending_count()
+            if ocr_pending > 0:
+                print(f"🔄 Starting OCR migration for {ocr_pending} existing screenshots...")
+                processor_service.start_ocr_migration()
+        except Exception as e:
+            # Don't crash the API if OCR migration fails - log and continue
+            logging.getLogger(__name__).exception("Failed to start OCR migration: %s", e)
 
     yield
 

@@ -141,6 +141,10 @@ def is_downloaded() -> bool:
 
         # Check for the sentence-transformers config file
         result = try_to_load_from_cache(model_id, "config_sentence_transformers.json")
+        if result is not None:
+            return True
+        # Fallback: some caches/models may use config.json
+        result = try_to_load_from_cache(model_id, "config.json")
         return result is not None
     except Exception:
         return False

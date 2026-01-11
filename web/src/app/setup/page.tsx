@@ -98,7 +98,7 @@ export default function SetupPage() {
     const textReady = status.text_embedding_status === 'ready' || eventStatus?.text_embedding?.downloaded;
 
     // Check if models are downloading or not ready
-    if (!clipReady ||
+    if (!clipReady || !textReady ||
         (eventStatus?.clip?.downloading) ||
         (eventStatus?.text_embedding?.downloading)) {
       return 'models';
@@ -222,9 +222,11 @@ export default function SetupPage() {
   const isFirstRun = status && !status.last_seen_version;
   const isUpdate = status && status.last_seen_version && status.last_seen_version !== status.current_version;
 
-  // Calculate migration progress
+  // Calculate migration progress (guard against division by zero)
   const migrationProgress = eventStatus?.ocr_stats
-    ? (eventStatus.ocr_stats.completed / (eventStatus.ocr_stats.completed + eventStatus.ocr_stats.pending)) * 100
+    ? (eventStatus.ocr_stats.completed + eventStatus.ocr_stats.pending > 0
+        ? (eventStatus.ocr_stats.completed / (eventStatus.ocr_stats.completed + eventStatus.ocr_stats.pending)) * 100
+        : 100)
     : status?.migration_status?.progress_percent ?? 0;
 
   return (

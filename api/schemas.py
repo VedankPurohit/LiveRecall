@@ -165,13 +165,22 @@ class SyncStartResponse(BaseModel):
 # =============================================================================
 
 
+class SearchMode(str, Enum):
+    """Available search modes"""
+
+    AUTO = "auto"  # Hybrid - combines all methods (default)
+    IMAGE = "image"  # CLIP image semantic search only
+    TEXT_FUZZY = "text_fuzzy"  # FTS5 trigram text search only
+    TEXT_SEMANTIC = "text_semantic"  # BGE text embedding search only
+
+
 class SearchRequest(BaseModel):
     """Search request with mode selection"""
 
     query: str = Field(..., min_length=1, max_length=500)
     limit: int = Field(default=20, ge=1, le=100)
-    search_mode: str = Field(
-        default="auto",
+    search_mode: SearchMode = Field(
+        default=SearchMode.AUTO,
         description="Search mode: 'auto' (hybrid), 'image', 'text_fuzzy', 'text_semantic'",
     )
     safe_mode: bool = Field(default=False)  # Off by default for personal recall app
@@ -538,15 +547,6 @@ class OCRStats(BaseModel):
 # =============================================================================
 # Search Types
 # =============================================================================
-
-
-class SearchMode(str, Enum):
-    """Available search modes"""
-
-    AUTO = "auto"  # Hybrid - combines all methods (default)
-    IMAGE = "image"  # CLIP image semantic search only
-    TEXT_FUZZY = "text_fuzzy"  # FTS5 trigram text search only
-    TEXT_SEMANTIC = "text_semantic"  # BGE text embedding search only
 
 
 class MatchSource(str, Enum):

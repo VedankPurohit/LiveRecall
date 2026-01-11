@@ -11,6 +11,7 @@ Events:
 import asyncio
 import contextlib
 import json
+import logging
 import threading
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from core.database import db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -78,8 +81,8 @@ async def event_generator() -> AsyncGenerator[str, None]:
                     "device": clip_status["device"],
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error getting CLIP model status: %s", e)
 
         try:
             from core.text_embeddings import get_model_status as get_bge_status
@@ -93,8 +96,8 @@ async def event_generator() -> AsyncGenerator[str, None]:
                     "device": bge_status["device"],
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error getting text embedding model status: %s", e)
 
         # Send initial sync status
         try:
@@ -114,8 +117,8 @@ async def event_generator() -> AsyncGenerator[str, None]:
                     "text_embeddings_done": progress.text_embeddings_done,
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error getting sync progress: %s", e)
 
         # Listen for new events
         while True:

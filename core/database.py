@@ -769,15 +769,24 @@ class Database:
             word_count = len(full_text.split()) if full_text else 0
 
         with self.cursor() as cur:
-            # Use INSERT OR REPLACE to handle re-processing gracefully
+            # Use ON CONFLICT DO UPDATE to preserve the id (avoid orphaning chunks)
             cur.execute(
                 """
-                INSERT OR REPLACE INTO screenshot_ocr (screenshot_id, full_text, confidence, word_count)
+                INSERT INTO screenshot_ocr (screenshot_id, full_text, confidence, word_count)
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT(screenshot_id) DO UPDATE SET
+                    full_text = excluded.full_text,
+                    confidence = excluded.confidence,
+                    word_count = excluded.word_count
             """,
                 (screenshot_id, full_text, confidence, word_count),
             )
-            return cur.lastrowid
+            # Get the id (either new or existing)
+            cur.execute(
+                "SELECT id FROM screenshot_ocr WHERE screenshot_id = ?",
+                (screenshot_id,),
+            )
+            return cur.fetchone()[0]
 
     def get_ocr_text(self, screenshot_id: int) -> dict | None:
         """Get OCR text for a screenshot"""
@@ -826,8 +835,9 @@ class Database:
         embedding_bytes = serialize_embedding(embedding)
 
         with self.cursor() as cur:
+            # Use INSERT OR REPLACE for idempotent reprocessing
             cur.execute(
-                "INSERT INTO ocr_text_embeddings (chunk_id, embedding) VALUES (?, ?)",
+                "INSERT OR REPLACE INTO ocr_text_embeddings (chunk_id, embedding) VALUES (?, ?)",
                 (chunk_id, embedding_bytes),
             )
             return True
@@ -977,8 +987,15 @@ class Database:
 
         query_bytes = serialize_embedding(query_embedding)
 
-        # Build conditions
-        chunk_condition = f"AND c.chunk_size = '{chunk_size}'" if chunk_size else ""
+        # Build conditions with parameterized queries to prevent SQL injection
+        params: list = [query_bytes, limit * 2]
+        chunk_condition = ""
+        if chunk_size:
+            # Validate chunk_size to prevent SQL injection
+            if chunk_size not in ("small", "large"):
+                raise ValueError(f"chunk_size must be 'small' or 'large', got '{chunk_size}'")
+            chunk_condition = "AND c.chunk_size = ?"
+            params.append(chunk_size)
 
         if visibility == "visible_only":
             vis_condition = "AND (s.is_hidden = 0 OR s.is_hidden IS NULL)"
@@ -1008,7 +1025,7 @@ class Database:
                     {vis_condition}
                 ORDER BY e.distance ASC
             """,
-                (query_bytes, limit * 2),
+                params,
             )
 
             results = []

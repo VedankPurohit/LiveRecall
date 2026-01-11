@@ -86,10 +86,10 @@ class OCRService:
     """
 
     _providers: dict[str, type[OCRProvider]] = {}
-    _instance: OCRProvider | None = None
 
     def __init__(self):
         self._current_provider: OCRProvider | None = None
+        self._provider_cache: dict[str, OCRProvider] = {}
 
     @classmethod
     def register(cls, name: str, provider_class: type[OCRProvider]) -> None:
@@ -116,12 +116,18 @@ class OCRService:
             available = ", ".join(self._providers.keys())
             raise ValueError(f"Unknown OCR provider: {provider_name}. Available: {available}")
 
+        # Check cache first
+        if provider_name in self._provider_cache:
+            return self._provider_cache[provider_name]
+
         provider_class = self._providers[provider_name]
         provider = provider_class()
 
         if not provider.is_available():
             raise RuntimeError(f"OCR provider '{provider_name}' is not available on this system")
 
+        # Cache for reuse
+        self._provider_cache[provider_name] = provider
         return provider
 
     def _get_default_provider_name(self) -> str:
