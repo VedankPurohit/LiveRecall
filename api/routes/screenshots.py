@@ -18,6 +18,7 @@ from api.schemas import (
     Screenshot,
     ScreenshotDeleteResponse,
     ScreenshotList,
+    ScreenshotOCRResponse,
     SuccessResponse,
     VisibilityFilter,
 )
@@ -320,6 +321,52 @@ async def get_screenshot_offset(
     if offset is None:
         raise HTTPException(status_code=404, detail="Screenshot not found")
     return {"offset": offset}
+
+
+@router.get("/{screenshot_id}/ocr", response_model=ScreenshotOCRResponse)
+async def get_screenshot_ocr(screenshot_id: int):
+    """
+    Get the OCR-extracted text for a screenshot.
+
+    Returns the text that was extracted from this screenshot using OCR,
+    along with confidence scores and word count.
+
+    - has_ocr: Whether OCR has been processed for this screenshot
+    - text: The extracted text (empty string if no text found)
+    - confidence: OCR confidence score (0-1)
+    - word_count: Number of words in extracted text
+    """
+    # First check if screenshot exists
+    screenshot = db.get_screenshot(screenshot_id)
+    if not screenshot:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+
+    # Check if OCR has been processed
+    if not screenshot.get("has_ocr"):
+        return ScreenshotOCRResponse(
+            has_ocr=False,
+            text="",
+            confidence=None,
+            word_count=0,
+        )
+
+    # Get OCR data
+    ocr_data = db.get_ocr_text(screenshot_id)
+    if not ocr_data:
+        # OCR was marked complete but no data (shouldn't happen, but handle gracefully)
+        return ScreenshotOCRResponse(
+            has_ocr=True,
+            text="",
+            confidence=None,
+            word_count=0,
+        )
+
+    return ScreenshotOCRResponse(
+        has_ocr=True,
+        text=ocr_data.get("full_text", ""),
+        confidence=ocr_data.get("confidence"),
+        word_count=ocr_data.get("word_count", 0),
+    )
 
 
 @router.delete("/{screenshot_id}", response_model=SuccessResponse)

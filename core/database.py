@@ -5,6 +5,7 @@ SQLite + sqlite-vec for vector similarity search
 
 import sqlite3
 import struct
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -36,6 +37,7 @@ class Database:
     def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or get_database_path()
         self.conn: sqlite3.Connection | None = None
+        self._lock = threading.Lock()  # Thread safety for concurrent access
 
     def connect(self):
         """Connect to database and initialize sqlite-vec"""
@@ -58,18 +60,19 @@ class Database:
 
     @contextmanager
     def cursor(self):
-        """Context manager for cursor"""
-        if self.conn is None:
-            raise RuntimeError("Database not connected")
-        cur = self.conn.cursor()
-        try:
-            yield cur
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
-        finally:
-            cur.close()
+        """Context manager for cursor with thread-safe locking"""
+        with self._lock:  # Ensure only one thread accesses DB at a time
+            if self.conn is None:
+                raise RuntimeError("Database not connected")
+            cur = self.conn.cursor()
+            try:
+                yield cur
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+            finally:
+                cur.close()
 
     def _initialize_tables(self):
         """Create tables if they don't exist"""
@@ -1071,7 +1074,7 @@ class Database:
         use_text_semantic = mode in ("auto", "text_semantic") and text_embedding is not None
 
         # 1. CLIP Image Search
-        if use_image:
+        if use_image and image_embedding is not None:
             try:
                 image_results = self.search_similar(
                     query_embedding=image_embedding,
@@ -1095,7 +1098,7 @@ class Database:
                 print(f"FTS search error: {e}")
 
         # 3. BGE Text Semantic Search (small chunks)
-        if use_text_semantic:
+        if use_text_semantic and text_embedding is not None:
             try:
                 small_results = self.search_text_embeddings(
                     query_embedding=text_embedding,
@@ -1110,7 +1113,7 @@ class Database:
                 print(f"Text semantic (small) search error: {e}")
 
         # 4. BGE Text Semantic Search (large chunks)
-        if use_text_semantic:
+        if use_text_semantic and text_embedding is not None:
             try:
                 large_results = self.search_text_embeddings(
                     query_embedding=text_embedding,

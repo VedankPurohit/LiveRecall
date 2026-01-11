@@ -9,7 +9,9 @@ Events:
 """
 
 import asyncio
+import contextlib
 import json
+import threading
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -21,28 +23,40 @@ from core.database import db
 router = APIRouter(prefix="/events", tags=["Events"])
 
 # Global event queue for broadcasting events to all connected clients
+# Protected by _subscribers_lock for thread-safe access
 _event_subscribers: list[asyncio.Queue] = []
+_subscribers_lock = threading.Lock()
 
 
 def broadcast_event(event_type: str, data: dict):
-    """Broadcast an event to all connected SSE clients"""
+    """Broadcast an event to all connected SSE clients.
+
+    Thread-safe: Makes a copy of the subscriber list before iterating
+    to prevent race conditions with subscribe/unsubscribe operations.
+    """
     event_data = {"type": event_type, **data}
-    for queue in _event_subscribers:
-        try:
+    # Copy list under lock to prevent modification during iteration
+    with _subscribers_lock:
+        subscribers = list(_event_subscribers)
+    for queue in subscribers:
+        with contextlib.suppress(asyncio.QueueFull):
             queue.put_nowait(event_data)
-        except asyncio.QueueFull:
-            pass  # Skip if queue is full
 
 
 @asynccontextmanager
 async def subscribe_to_events():
-    """Context manager for subscribing to events"""
+    """Context manager for subscribing to events.
+
+    Thread-safe: Uses lock when modifying the subscriber list.
+    """
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-    _event_subscribers.append(queue)
+    with _subscribers_lock:
+        _event_subscribers.append(queue)
     try:
         yield queue
     finally:
-        _event_subscribers.remove(queue)
+        with _subscribers_lock:
+            _event_subscribers.remove(queue)
 
 
 async def event_generator() -> AsyncGenerator[str, None]:
@@ -178,7 +192,7 @@ async def get_all_status():
         pass
 
     # OCR status
-    ocr_status = {"available": False, "provider": None}
+    ocr_status: dict[str, bool | str | None] = {"available": False, "provider": None}
     try:
         from core.ocr import ocr_service
 

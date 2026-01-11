@@ -11,6 +11,7 @@ OCR and text embedding providers can be configured in config.py.
 To change models, update config and call processor_service.recompute_ocr().
 """
 
+import contextlib
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -274,10 +275,8 @@ class ProcessorService:
                     self._progress.error_type = "ocr_failed"
                     # Still count as processed since embedding worked
                     self._progress.processed += 1
-                    try:
+                    with contextlib.suppress(Exception):
                         db.mark_ocr_complete(screenshot["id"])
-                    except Exception:
-                        pass
                 except (TypeError, AttributeError, KeyError) as e:
                     # Likely a code bug - log clearly but continue with other screenshots
                     error_msg = f"{type(e).__name__}: {e}"
@@ -320,7 +319,7 @@ class ProcessorService:
         1. Extract text via OCR provider
         2. Store OCR result
         3. Chunk text (small + large)
-        4. Generate BGE embeddings for chunks
+        4. Generate BGE embeddings for chunks (batched for speed)
         5. Store chunks and embeddings
 
         Raises:
@@ -369,35 +368,31 @@ class ProcessorService:
                 large_overlap=config.chunking.large_overlap,
             )
 
-            # Process small chunks
+            # Collect all chunks for batch processing
+            all_chunks = []
             for chunk in chunked.small:
-                chunk_id = db.add_ocr_chunk(
-                    ocr_id=ocr_id,
-                    chunk_size="small",
-                    chunk_index=chunk.index,
-                    chunk_text=chunk.text,
-                    start_char=chunk.start_char,
-                    end_char=chunk.end_char,
-                )
-                # Generate and store embedding
-                embedding = text_emb_service.get_text_embedding(chunk.text)
-                db.add_text_embedding(chunk_id, embedding)
-
-            # Process large chunks
+                all_chunks.append(("small", chunk))
             for chunk in chunked.large:
-                chunk_id = db.add_ocr_chunk(
-                    ocr_id=ocr_id,
-                    chunk_size="large",
-                    chunk_index=chunk.index,
-                    chunk_text=chunk.text,
-                    start_char=chunk.start_char,
-                    end_char=chunk.end_char,
-                )
-                # Generate and store embedding
-                embedding = text_emb_service.get_text_embedding(chunk.text)
-                db.add_text_embedding(chunk_id, embedding)
+                all_chunks.append(("large", chunk))
 
-            self._progress.text_embeddings_done += len(chunked.small) + len(chunked.large)
+            if all_chunks:
+                # Batch generate embeddings (much faster than individual calls)
+                all_texts = [chunk.text for _, chunk in all_chunks]
+                all_embeddings = text_emb_service.get_batch_embeddings(all_texts)
+
+                # Store chunks and embeddings
+                for (chunk_size, chunk), embedding in zip(all_chunks, all_embeddings, strict=False):
+                    chunk_id = db.add_ocr_chunk(
+                        ocr_id=ocr_id,
+                        chunk_size=chunk_size,
+                        chunk_index=chunk.index,
+                        chunk_text=chunk.text,
+                        start_char=chunk.start_char,
+                        end_char=chunk.end_char,
+                    )
+                    db.add_text_embedding(chunk_id, embedding)
+
+            self._progress.text_embeddings_done += len(all_chunks)
 
         # Mark OCR complete for this screenshot
         db.mark_ocr_complete(screenshot_id)
@@ -424,10 +419,8 @@ class ProcessorService:
                     self._progress.last_error = str(e)
                     self._progress.error_type = "ocr_failed"
                     # Mark as complete so we don't retry
-                    try:
+                    with contextlib.suppress(Exception):
                         db.mark_ocr_complete(screenshot["id"])
-                    except Exception:
-                        pass
                 except (TypeError, AttributeError, KeyError) as e:
                     # Likely a code bug - log clearly but continue with other screenshots
                     error_msg = f"{type(e).__name__}: {e}"
