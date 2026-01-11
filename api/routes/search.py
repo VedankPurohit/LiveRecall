@@ -15,6 +15,7 @@ from multiple sources.
 from fastapi import APIRouter, HTTPException
 
 from api.schemas import (
+    SearchMode,
     SearchRequest,
     SearchResponse,
     SearchResult,
@@ -57,15 +58,13 @@ async def search_screenshots(request: SearchRequest):
             detail="No synced screenshots. Run sync first to generate embeddings.",
         )
 
-    search_mode = request.search_mode.value
-
     # Generate embeddings based on search mode
     image_embedding = None
     text_embedding = None
 
     try:
         # CLIP image embedding (for image and auto modes)
-        if search_mode in ("auto", "image"):
+        if request.search_mode in (SearchMode.AUTO, SearchMode.IMAGE):
             if request.safe_mode:
                 image_embedding = get_safe_search_embedding(
                     text=request.query,
@@ -81,7 +80,7 @@ async def search_screenshots(request: SearchRequest):
                 image_embedding = get_text_embedding(request.query)
 
         # BGE text embedding (for text_semantic and auto modes)
-        if search_mode in ("auto", "text_semantic"):
+        if request.search_mode in (SearchMode.AUTO, SearchMode.TEXT_SEMANTIC):
             # Lazy import to avoid loading text model if not needed
             from core.text_embeddings import text_embedding_service
 
@@ -97,7 +96,7 @@ async def search_screenshots(request: SearchRequest):
     search_limit = request.limit * 3 if (request.start_date or request.end_date) else request.limit
 
     try:
-        if search_mode == "image":
+        if request.search_mode == SearchMode.IMAGE:
             # Pure image search (legacy behavior)
             if image_embedding is None:
                 raise HTTPException(status_code=500, detail="Failed to generate image embedding")
@@ -111,7 +110,7 @@ async def search_screenshots(request: SearchRequest):
             for r in results:
                 r["match_sources"] = ["image"]
 
-        elif search_mode == "text_fuzzy":
+        elif request.search_mode == SearchMode.TEXT_FUZZY:
             # Pure FTS5 text search
             results = db.search_ocr_fts(
                 query=request.query,
@@ -123,7 +122,7 @@ async def search_screenshots(request: SearchRequest):
                 r["similarity"] = r.get("relevance_score", 0.5)  # BM25 score as similarity
                 r["match_sources"] = ["text_fts"]
 
-        elif search_mode == "text_semantic":
+        elif request.search_mode == SearchMode.TEXT_SEMANTIC:
             # Pure BGE text semantic search
             if text_embedding is None:
                 raise HTTPException(status_code=500, detail="Failed to generate text embedding")

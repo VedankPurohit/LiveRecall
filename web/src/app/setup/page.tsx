@@ -99,8 +99,8 @@ export default function SetupPage() {
 
     // Check if models are downloading or not ready
     if (!clipReady || !textReady ||
-        (eventStatus?.clip?.downloading) ||
-        (eventStatus?.text_embedding?.downloading)) {
+        eventStatus?.clip?.downloading ||
+        eventStatus?.text_embedding?.downloading) {
       return 'models';
     }
 
