@@ -16,6 +16,8 @@ Usage:
 
 import argparse
 import contextlib
+import os
+import platform
 import random
 import statistics
 import sys
@@ -346,29 +348,44 @@ def print_summary(results: list[dict]):
     # Get best batch embedding time
     emb_result = next((r for r in results if r["name"] == "Text Embedding"), None)
     emb_time = 0
+    avg_chunks = next((r["avg_chunks"] for r in results if "avg_chunks" in r), 6)
     if emb_result and "batch_results" in emb_result:
         # Use largest batch per-item time
         largest = max(emb_result["batch_results"].keys())
         emb_time = emb_result["batch_results"][largest]["per_item"]
-        avg_chunks = next((r["avg_chunks"] for r in results if "avg_chunks" in r), 6)
         emb_time = emb_time * avg_chunks  # Multiply by avg chunks per image
 
     total = clip_time + ocr_time + chunk_time + emb_time
     print(f"    CLIP:      {clip_time * 1000:.0f}ms")
     print(f"    OCR:       {ocr_time * 1000:.0f}ms")
     print(f"    Chunking:  {chunk_time * 1000:.0f}ms")
-    print(f"    Embedding: {emb_time * 1000:.0f}ms (batch, ~{avg_chunks:.0f} chunks)")
+    if emb_time > 0:
+        print(f"    Embedding: {emb_time * 1000:.0f}ms (batch, ~{avg_chunks:.0f} chunks)")
+    else:
+        print("    Embedding: skipped")
     print("    ─────────────────────")
     print(f"    TOTAL:     {total * 1000:.0f}ms/image")
     print(f"\n    For 20,000 images: ~{total * 20000 / 60:.0f} minutes")
+
+
+def get_default_screenshots_dir() -> str:
+    """Get platform-appropriate default screenshots directory"""
+    system = platform.system()
+    if system == "Darwin":
+        return str(Path.home() / "Library/Application Support/LiveRecall/screenshots")
+    elif system == "Windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData/Roaming"))
+        return str(Path(appdata) / "LiveRecall/screenshots")
+    else:
+        return str(Path.home() / ".local/share/LiveRecall/screenshots")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark OCR and embedding performance")
     parser.add_argument(
         "--dir",
-        default="/Users/vedank/Library/Application Support/LiveRecall/screenshots",
-        help="Directory containing screenshots",
+        default=None,
+        help="Directory containing screenshots (default: platform-specific LiveRecall data dir)",
     )
     parser.add_argument("--count", type=int, default=100, help="Number of images to test")
     parser.add_argument("--show-ocr", action="store_true", help="Show full OCR output for each image")
@@ -377,6 +394,10 @@ def main():
     parser.add_argument("--skip-embedding", action="store_true", help="Skip embedding benchmark")
 
     args = parser.parse_args()
+
+    # Use platform-appropriate default if not specified
+    if args.dir is None:
+        args.dir = get_default_screenshots_dir()
 
     print(f"Benchmarking with {args.count} random images from:")
     print(f"  {args.dir}")

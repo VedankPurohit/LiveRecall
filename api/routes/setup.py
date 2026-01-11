@@ -3,6 +3,8 @@ Setup API Routes
 Handle first-run and version-change setup flow for screen recording permissions
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -10,6 +12,8 @@ from api.schemas import SetupStatus, SuccessResponse
 from core.config import config
 from core.platform import current_platform
 from core.updater import VERSION
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["Setup"])
 
@@ -157,7 +161,7 @@ async def get_model_status():
         if status.get("loaded") or status.get("downloaded"):
             clip_status = "ready"
     except Exception as e:
-        print(f"Error checking CLIP model status: {e}")
+        logger.warning("Error checking CLIP model status: %s", e)
 
     # Text embedding model status
     text_embedding_status = "not_downloaded"
@@ -168,7 +172,7 @@ async def get_model_status():
         if status.get("loaded") or status.get("downloaded"):
             text_embedding_status = "ready"
     except Exception as e:
-        print(f"Error checking text embedding model status: {e}")
+        logger.warning("Error checking text embedding model status: %s", e)
 
     # OCR status
     ocr_status = "not_available"
@@ -178,7 +182,7 @@ async def get_model_status():
         if ocr_service.is_available():
             ocr_status = "ready"
     except Exception as e:
-        print(f"Error checking OCR status: {e}")
+        logger.warning("Error checking OCR status: %s", e)
 
     return {
         "clip": clip_status,

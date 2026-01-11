@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 from core.database import db  # noqa: E402
 
 
-def main():
+def main() -> None:
     print("OCR Data Cleanup Script")
     print("=" * 50)
 

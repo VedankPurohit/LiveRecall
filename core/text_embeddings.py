@@ -310,7 +310,11 @@ def cosine_similarity(emb1: list[float], emb2: list[float]) -> float:
     """Calculate cosine similarity between two embeddings"""
     a = np.array(emb1)
     b = np.array(emb2)
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return float(np.dot(a, b) / (norm_a * norm_b))
 
 
 # =============================================================================

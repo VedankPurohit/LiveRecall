@@ -8,6 +8,8 @@ The sync process has multiple phases:
 3. BGE text embeddings (for text semantic search)
 """
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.schemas import (
@@ -30,6 +32,8 @@ from core.embeddings import (
     unload_model,
 )
 from core.processor import SyncProgress, processor_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sync", tags=["Sync"])
 
@@ -281,7 +285,10 @@ async def recompute_ocr():
     import threading
 
     def run_recompute():
-        processor_service.recompute_ocr()
+        try:
+            processor_service.recompute_ocr()
+        except Exception as e:
+            logger.exception("Error during OCR recompute: %s", e)
 
     thread = threading.Thread(target=run_recompute, daemon=True)
     thread.start()
@@ -317,8 +324,8 @@ async def get_all_models_status():
             idle_seconds=text_status["idle_seconds"],
             auto_unload_seconds=text_status["auto_unload_seconds"],
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Error getting text embedding model status: %s", e)
 
     # OCR status
     ocr_status = "not_available"
@@ -327,8 +334,8 @@ async def get_all_models_status():
 
         if ocr_service.is_available():
             ocr_status = ocr_service.get_provider_name()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Error getting OCR status: %s", e)
 
     return AllModelsStatus(
         clip=clip,

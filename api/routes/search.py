@@ -57,7 +57,7 @@ async def search_screenshots(request: SearchRequest):
             detail="No synced screenshots. Run sync first to generate embeddings.",
         )
 
-    search_mode = request.search_mode.lower()
+    search_mode = request.search_mode.value
 
     # Generate embeddings based on search mode
     image_embedding = None
