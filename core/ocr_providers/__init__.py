@@ -17,4 +17,4 @@ To add a new provider:
 from __future__ import annotations
 
 # Providers are imported conditionally in core/ocr.py based on availability
-__all__ = []
+__all__: list[str] = []

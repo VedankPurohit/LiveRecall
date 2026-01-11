@@ -190,6 +190,17 @@ export async function getScreenshotOffset(
   return fetchApi(`/screenshots/${screenshotId}/offset?${params}`);
 }
 
+export interface ScreenshotOCR {
+  has_ocr: boolean;
+  text: string;
+  confidence: number | null;
+  word_count: number;
+}
+
+export async function getScreenshotOCR(screenshotId: number): Promise<ScreenshotOCR> {
+  return fetchApi(`/screenshots/${screenshotId}/ocr`);
+}
+
 // Timeline
 export async function getDateRange(visibility: VisibilityFilter = 'visible_only'): Promise<DateRange> {
   return fetchApi(`/screenshots/date-range?visibility=${visibility}`);

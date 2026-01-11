@@ -295,6 +295,25 @@ class ScreenshotDeleteResponse(BaseModel):
     message: str
 
 
+class ScreenshotOCRResponse(BaseModel):
+    """Response containing OCR text for a screenshot"""
+
+    has_ocr: bool = Field(description="Whether OCR has been processed for this screenshot")
+    text: str = Field(default="", description="Extracted text from the screenshot")
+    confidence: float | None = Field(default=None, description="OCR confidence score (0-1)")
+    word_count: int = Field(default=0, description="Number of words extracted")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "has_ocr": True,
+                "text": "Hello World\nThis is extracted text from the screenshot.",
+                "confidence": 0.95,
+                "word_count": 8,
+            }
+        }
+
+
 # =============================================================================
 # Bulk Operations
 # =============================================================================

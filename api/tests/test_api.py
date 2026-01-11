@@ -751,3 +751,120 @@ class TestSearchModes:
         assert response.status_code == 200
         data = response.json()
         assert "results" in data
+
+
+class TestScreenshotOCREndpoint:
+    """Test screenshot OCR endpoint"""
+
+    @patch("api.routes.screenshots.db")
+    def test_get_ocr_text_success(self, mock_db):
+        """Should return OCR text for a screenshot with OCR data"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.screenshots import router
+
+        mock_db.get_screenshot.return_value = {
+            "id": 1,
+            "image_path": "/path/to/img.jpg",
+            "timestamp": "251206120000",
+            "has_embedding": 1,
+            "has_ocr": 1,
+            "is_hidden": 0,
+        }
+        mock_db.get_ocr_text.return_value = {
+            "full_text": "Hello world this is sample OCR text",
+            "confidence": 0.95,
+            "word_count": 7,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/screenshots/1/ocr")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_ocr"] is True
+        assert data["text"] == "Hello world this is sample OCR text"
+        assert data["confidence"] == 0.95
+        assert data["word_count"] == 7
+
+    @patch("api.routes.screenshots.db")
+    def test_get_ocr_text_not_processed(self, mock_db):
+        """Should return has_ocr=False when OCR hasn't been processed"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.screenshots import router
+
+        mock_db.get_screenshot.return_value = {
+            "id": 1,
+            "image_path": "/path/to/img.jpg",
+            "timestamp": "251206120000",
+            "has_embedding": 1,
+            "has_ocr": 0,
+            "is_hidden": 0,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/screenshots/1/ocr")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_ocr"] is False
+        assert data["text"] == ""
+        assert data["word_count"] == 0
+
+    @patch("api.routes.screenshots.db")
+    def test_get_ocr_text_screenshot_not_found(self, mock_db):
+        """Should return 404 for non-existent screenshot"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.screenshots import router
+
+        mock_db.get_screenshot.return_value = None
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/screenshots/999/ocr")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @patch("api.routes.screenshots.db")
+    def test_get_ocr_text_empty_text(self, mock_db):
+        """Should handle screenshots with OCR done but no text extracted"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.screenshots import router
+
+        mock_db.get_screenshot.return_value = {
+            "id": 1,
+            "image_path": "/path/to/img.jpg",
+            "timestamp": "251206120000",
+            "has_embedding": 1,
+            "has_ocr": 1,
+            "is_hidden": 0,
+        }
+        mock_db.get_ocr_text.return_value = {
+            "full_text": "",
+            "confidence": None,
+            "word_count": 0,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/screenshots/1/ocr")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_ocr"] is True
+        assert data["text"] == ""
+        assert data["word_count"] == 0

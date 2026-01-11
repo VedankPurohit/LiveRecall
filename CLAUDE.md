@@ -35,12 +35,28 @@ uv run python scripts/build_release.py --quick # Skip web rebuild
 ### Key Components
 
 - **core/capture.py** - CaptureService: Screenshot capture using mss, SSIM-based change detection
-- **core/database.py** - SQLite + sqlite-vec for vector similarity search
+- **core/database.py** - SQLite + sqlite-vec for vector similarity search (thread-safe with Lock)
 - **core/embeddings.py** - CLIP model with lazy loading and 5-minute auto-unload
-- **core/processor.py** - Background sync service for processing screenshots
+- **core/text_embeddings.py** - Text embedding model for OCR semantic search
+- **core/ocr.py** - OCR service with pluggable providers (Apple Vision / Tesseract)
+- **core/chunking.py** - Dual-size text chunking (small 512 + large 2048 tokens)
+- **core/processor.py** - Background sync service for processing screenshots (CLIP + OCR + text embeddings)
 - **tray/app.py** - TrayApp: System tray menu, spawns backend via subprocess
 - **tray/backend.py** - Manages FastAPI server as subprocess
 - **api/main.py** - FastAPI app that serves REST API + static Next.js build from web/out/
+
+### OCR & Text Search Architecture
+
+The sync pipeline processes screenshots through:
+1. CLIP image embedding → `screenshot_embeddings` table (512-dim vectors)
+2. OCR text extraction → `screenshot_ocr` table (full text + confidence)
+3. Text chunking → `ocr_text_chunks` table (dual sizes for precision vs context)
+4. Text embeddings → `ocr_text_embeddings` table (384-dim vectors)
+
+Search uses hybrid Reciprocal Rank Fusion combining:
+- Image semantic search (CLIP)
+- Text fuzzy search (FTS5 trigram)
+- Text semantic search (small + large chunks)
 
 ### API Routes Structure
 
@@ -78,6 +94,14 @@ async def get_something():
 ## Data Storage
 
 macOS: `~/Library/Application Support/LiveRecall/` (SQLite database + screenshots folder)
+
+### Database Tables
+- `screenshots` - Screenshot metadata (id, path, timestamp, has_embedding, has_ocr)
+- `screenshot_embeddings` - CLIP image vectors (512-dim, sqlite-vec)
+- `screenshot_ocr` - OCR extracted text (full_text, confidence, word_count)
+- `ocr_text_chunks` - Dual-size chunks (small 512 tokens, large 2048 tokens)
+- `ocr_text_embeddings` - Text embedding vectors (384-dim, sqlite-vec)
+- `ocr_text_fts` - FTS5 full-text search index (trigram tokenizer)
 
 ## API Documentation
 

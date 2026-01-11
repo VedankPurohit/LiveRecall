@@ -19,6 +19,8 @@ import {
   bulkDeleteScreenshots,
   bulkHideScreenshots,
   bulkUnhideScreenshots,
+  getScreenshotOCR,
+  type ScreenshotOCR,
 } from '@/lib/api';
 import type { Screenshot, SystemStatus, SyncStatus, DensityBucket, IncognitoStatus, VisibilityFilter, SearchMode } from '@/types';
 import { useSelection } from '@/hooks/useSelection';
@@ -59,6 +61,9 @@ export default function Home() {
   const [searchStartDate, setSearchStartDate] = useState<string | undefined>();
   const [searchEndDate, setSearchEndDate] = useState<string | undefined>();
   const [selectedImage, setSelectedImage] = useState<Screenshot | null>(null);
+  const [showOCRModal, setShowOCRModal] = useState(false);
+  const [ocrData, setOcrData] = useState<ScreenshotOCR | null>(null);
+  const [isLoadingOCR, setIsLoadingOCR] = useState(false);
   const [datePreset, setDatePreset] = useState<string>('all');
   const [safeMode, setSafeMode] = useState(true);
   const [safeModeLevel, setSafeModeLevel] = useState<string>('mid');
@@ -921,6 +926,29 @@ export default function Home() {
     }
   }, [visibilityFilter, loadWindowAtOffset]);
 
+  // View OCR text for a screenshot
+  const viewOCRText = useCallback(async (screenshot: Screenshot) => {
+    setIsLoadingOCR(true);
+    setOcrData(null);
+    setShowOCRModal(true);
+    try {
+      const data = await getScreenshotOCR(screenshot.id);
+      setOcrData(data);
+    } catch (err) {
+      console.error('Failed to fetch OCR text:', err);
+      setOcrData({ has_ocr: false, text: '', confidence: null, word_count: 0 });
+    } finally {
+      setIsLoadingOCR(false);
+    }
+  }, []);
+
+  // Copy OCR text to clipboard
+  const copyOCRText = useCallback(() => {
+    if (ocrData?.text) {
+      navigator.clipboard.writeText(ocrData.text);
+    }
+  }, [ocrData]);
+
   // Calculate local index within the loaded window
   const localIndex = currentIndex - windowOffset;
   const currentSnapshot = (snapshots.length > 0 && localIndex >= 0 && localIndex < snapshots.length)
@@ -1508,6 +1536,95 @@ export default function Home() {
               </svg>
               View in Grid
             </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                viewOCRText(selectedImage);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fbbf24]/10 hover:bg-[#fbbf24]/20 text-[#fbbf24] rounded text-xs border border-[#fbbf24]/30 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              View Text
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* OCR Text Modal */}
+      {showOCRModal && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setShowOCRModal(false)}
+        >
+          <div
+            className="bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a]">
+              <h3 className="text-sm font-medium text-[#f5f5f5]">Extracted Text</h3>
+              <button
+                onClick={() => setShowOCRModal(false)}
+                className="p-1 text-[#555] hover:text-[#f5f5f5] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-4">
+              {isLoadingOCR ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-5 h-5 border-2 border-[#86efac] border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-2 text-sm text-[#8a8a8a]">Loading...</span>
+                </div>
+              ) : ocrData?.has_ocr === false ? (
+                <div className="text-center py-8 text-[#8a8a8a]">
+                  <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm">OCR not yet processed for this screenshot</p>
+                </div>
+              ) : ocrData?.text ? (
+                <pre className="text-sm text-[#d4d4d4] whitespace-pre-wrap font-mono leading-relaxed">
+                  {ocrData.text}
+                </pre>
+              ) : (
+                <div className="text-center py-8 text-[#8a8a8a]">
+                  <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                  <p className="text-sm">No text found in this screenshot</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {ocrData?.has_ocr && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-[#2a2a2a]">
+                <div className="flex items-center gap-4 text-xs text-[#8a8a8a]">
+                  <span>{ocrData.word_count} words</span>
+                  {ocrData.confidence !== null && (
+                    <span>{(ocrData.confidence * 100).toFixed(0)}% confidence</span>
+                  )}
+                </div>
+                {ocrData.text && (
+                  <button
+                    onClick={copyOCRText}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#86efac]/10 hover:bg-[#86efac]/20 text-[#86efac] rounded text-xs border border-[#86efac]/30 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                    </svg>
+                    Copy to Clipboard
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
