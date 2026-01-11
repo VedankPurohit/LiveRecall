@@ -2,12 +2,30 @@
 Core module test fixtures
 """
 
+import sys
+
 import pytest
+
+# macOS CI runners have SQLite without extension loading support
+# Skip database tests that require sqlite-vec on macOS CI
+_is_macos_ci = sys.platform == "darwin" and "CI" in __import__("os").environ
+
+requires_sqlite_extensions = pytest.mark.skipif(
+    _is_macos_ci,
+    reason="macOS CI runners don't support SQLite extension loading",
+)
 
 
 @pytest.fixture
 def mock_db(temp_dir):
-    """Create a mock database for testing"""
+    """Create a mock database for testing.
+
+    Note: This fixture requires sqlite-vec extension which may not be available
+    on all platforms (e.g., macOS CI runners).
+    """
+    if _is_macos_ci:
+        pytest.skip("macOS CI runners don't support SQLite extension loading")
+
     from core.database import Database
 
     db_path = temp_dir / "test.db"
