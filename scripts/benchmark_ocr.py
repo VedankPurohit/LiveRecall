@@ -103,7 +103,7 @@ def benchmark_clip(images: list[Path]) -> dict:
         times.append(elapsed)
 
         if i < 3:  # Show first few
-            print(f"  [{i+1}] {img.name}: {elapsed*1000:.1f}ms (dim={len(embedding)})")
+            print(f"  [{i + 1}] {img.name}: {elapsed * 1000:.1f}ms (dim={len(embedding)})")
         elif i == 3:
             print(f"  ... processing {len(images) - 3} more ...")
 
@@ -148,7 +148,7 @@ def benchmark_ocr(images: list[Path], show_output: bool = False) -> dict:
         )
 
         if i < 5 or show_output:  # Show first few or all if requested
-            print(f"  [{i+1}] {img.name}: {elapsed*1000:.1f}ms")
+            print(f"  [{i + 1}] {img.name}: {elapsed * 1000:.1f}ms")
             conf_str = f"{result.confidence:.2f}" if result.confidence is not None else "N/A"
             print(f"       Words: {word_count}, Confidence: {conf_str}")
             if show_output:
@@ -221,7 +221,7 @@ def benchmark_chunking(ocr_texts: list[str]) -> dict:
         chunk_counts.append(total_chunks)
 
         if i < 3:
-            print(f"  [{i+1}] {len(text)} chars: {elapsed*1000:.2f}ms")
+            print(f"  [{i + 1}] {len(text)} chars: {elapsed * 1000:.2f}ms")
             print(f"       Small chunks: {len(result.small)}, Large chunks: {len(result.large)}")
 
     if not times:
@@ -275,7 +275,7 @@ def benchmark_text_embedding(texts: list[str]) -> dict:
         elapsed = time.perf_counter() - start
         single_times.append(elapsed)
         if i < 3:
-            print(f"    [{i+1}] {len(text)} chars: {elapsed*1000:.1f}ms (dim={len(emb)})")
+            print(f"    [{i + 1}] {len(text)} chars: {elapsed * 1000:.1f}ms (dim={len(emb)})")
 
     # Batch embedding benchmark
     print("\n  Batch embedding (all at once):")
@@ -296,7 +296,7 @@ def benchmark_text_embedding(texts: list[str]) -> dict:
             "total": elapsed,
             "per_item": per_item,
         }
-        print(f"    Batch of {batch_size}: {elapsed*1000:.1f}ms total, {per_item*1000:.1f}ms/item")
+        print(f"    Batch of {batch_size}: {elapsed * 1000:.1f}ms total, {per_item * 1000:.1f}ms/item")
 
     return {
         "name": "Text Embedding",
@@ -319,21 +319,21 @@ def print_summary(results: list[dict]):
 
         print(f"\n  {r['name']}:")
         if "mean" in r:
-            print(f"    Mean:   {r['mean']*1000:.1f}ms")
-            print(f"    Median: {r['median']*1000:.1f}ms")
-            print(f"    Min:    {r['min']*1000:.1f}ms")
-            print(f"    Max:    {r['max']*1000:.1f}ms")
+            print(f"    Mean:   {r['mean'] * 1000:.1f}ms")
+            print(f"    Median: {r['median'] * 1000:.1f}ms")
+            print(f"    Min:    {r['min'] * 1000:.1f}ms")
+            print(f"    Max:    {r['max'] * 1000:.1f}ms")
             if r.get("stdev"):
-                print(f"    StdDev: {r['stdev']*1000:.1f}ms")
+                print(f"    StdDev: {r['stdev'] * 1000:.1f}ms")
         if "avg_words" in r:
             print(f"    Avg words/image: {r['avg_words']:.1f}")
             print(f"    Empty OCR count: {r['empty_count']}")
         if "avg_chunks" in r:
             print(f"    Avg chunks/text: {r['avg_chunks']:.1f}")
         if "batch_results" in r:
-            print(f"    Single embedding: {r['single_mean']*1000:.1f}ms")
+            print(f"    Single embedding: {r['single_mean'] * 1000:.1f}ms")
             for bs, br in r["batch_results"].items():
-                print(f"    Batch {bs}: {br['per_item']*1000:.1f}ms/item ({br['total']*1000:.0f}ms total)")
+                print(f"    Batch {bs}: {br['per_item'] * 1000:.1f}ms/item ({br['total'] * 1000:.0f}ms total)")
 
     # Estimate total processing time per image
     print("\n" + "-" * 60)
@@ -354,13 +354,13 @@ def print_summary(results: list[dict]):
         emb_time = emb_time * avg_chunks  # Multiply by avg chunks per image
 
     total = clip_time + ocr_time + chunk_time + emb_time
-    print(f"    CLIP:      {clip_time*1000:.0f}ms")
-    print(f"    OCR:       {ocr_time*1000:.0f}ms")
-    print(f"    Chunking:  {chunk_time*1000:.0f}ms")
-    print(f"    Embedding: {emb_time*1000:.0f}ms (batch, ~{avg_chunks:.0f} chunks)")
+    print(f"    CLIP:      {clip_time * 1000:.0f}ms")
+    print(f"    OCR:       {ocr_time * 1000:.0f}ms")
+    print(f"    Chunking:  {chunk_time * 1000:.0f}ms")
+    print(f"    Embedding: {emb_time * 1000:.0f}ms (batch, ~{avg_chunks:.0f} chunks)")
     print("    ─────────────────────")
-    print(f"    TOTAL:     {total*1000:.0f}ms/image")
-    print(f"\n    For 20,000 images: ~{total*20000/60:.0f} minutes")
+    print(f"    TOTAL:     {total * 1000:.0f}ms/image")
+    print(f"\n    For 20,000 images: ~{total * 20000 / 60:.0f} minutes")
 
 
 def main():

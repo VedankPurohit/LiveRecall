@@ -47,9 +47,7 @@ class AppleVisionOCR:
 
                 self._ocr = OCR
             except ImportError as e:
-                raise ImportError(
-                    "ocrmac is required for Apple Vision OCR. " "Install it with: pip install ocrmac"
-                ) from e
+                raise ImportError("ocrmac is required for Apple Vision OCR. Install it with: pip install ocrmac") from e
         return self._ocr
 
     def extract_text(self, image_path: str | Path) -> OCRResult:
