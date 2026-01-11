@@ -16,6 +16,7 @@ Requirements:
 from __future__ import annotations
 
 import platform
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,18 +27,26 @@ if TYPE_CHECKING:
 
 # Module-level singleton for OCR class (following codebase conventions)
 _ocr_class: type[OCRType] | None = None
+_ocr_class_lock = threading.Lock()
 
 
 def _get_ocr_class() -> type[OCRType]:
     """Get the OCR class, loading it if necessary (module-level singleton)"""
     global _ocr_class
-    if _ocr_class is None:
-        try:
-            from ocrmac.ocrmac import OCR
+    # Fast path: check without lock
+    if _ocr_class is not None:
+        return _ocr_class
 
-            _ocr_class = OCR
-        except ImportError as e:
-            raise ImportError("ocrmac is required for Apple Vision OCR. Install it with: pip install ocrmac") from e
+    # Double-checked locking for thread-safe initialization
+    with _ocr_class_lock:
+        # Re-check inside lock
+        if _ocr_class is None:
+            try:
+                from ocrmac.ocrmac import OCR
+
+                _ocr_class = OCR
+            except ImportError as e:
+                raise ImportError("ocrmac is required for Apple Vision OCR. Install it with: pip install ocrmac") from e
     return _ocr_class
 
 

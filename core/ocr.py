@@ -31,6 +31,7 @@ To switch provider:
 from __future__ import annotations
 
 import platform
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -90,6 +91,7 @@ class OCRService:
     def __init__(self):
         self._current_provider: OCRProvider | None = None
         self._provider_cache: dict[str, OCRProvider] = {}
+        self._lock = threading.Lock()
 
     @classmethod
     def register(cls, name: str, provider_class: type[OCRProvider]) -> None:
@@ -116,19 +118,25 @@ class OCRService:
             available = ", ".join(self._providers.keys())
             raise ValueError(f"Unknown OCR provider: {provider_name}. Available: {available}")
 
-        # Check cache first
+        # Check cache first (fast path without lock)
         if provider_name in self._provider_cache:
             return self._provider_cache[provider_name]
 
-        provider_class = self._providers[provider_name]
-        provider = provider_class()
+        # Double-checked locking for thread-safe initialization
+        with self._lock:
+            # Re-check inside lock in case another thread initialized
+            if provider_name in self._provider_cache:
+                return self._provider_cache[provider_name]
 
-        if not provider.is_available():
-            raise RuntimeError(f"OCR provider '{provider_name}' is not available on this system")
+            provider_class = self._providers[provider_name]
+            provider = provider_class()
 
-        # Cache for reuse
-        self._provider_cache[provider_name] = provider
-        return provider
+            if not provider.is_available():
+                raise RuntimeError(f"OCR provider '{provider_name}' is not available on this system")
+
+            # Cache for reuse
+            self._provider_cache[provider_name] = provider
+            return provider
 
     def _get_default_provider_name(self) -> str:
         """Get the default provider name based on platform"""
