@@ -95,6 +95,13 @@ export default function Home() {
   const loadMoreBeforeRef = useRef<HTMLDivElement>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
 
+  // Timeline sliding window state
+  const WINDOW_SIZE = 500;
+  const PREFETCH_THRESHOLD = 100;
+  const [windowOffset, setWindowOffset] = useState(0);
+  const [isLoadingWindow, setIsLoadingWindow] = useState(false);
+  const loadingRef = useRef(false);
+
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
@@ -182,12 +189,13 @@ export default function Home() {
   const fetchData = useCallback(async () => {
     try {
       const [snapshotsData, densityData] = await Promise.all([
-        getScreenshots(500, 0, undefined, undefined, visibilityFilter),
+        getScreenshots(WINDOW_SIZE, 0, undefined, undefined, visibilityFilter),
         getDensity(100, visibilityFilter),
       ]);
       if (snapshotsData?.screenshots) {
         setSnapshots(snapshotsData.screenshots);
         setTotalSnapshots(snapshotsData.total);
+        setWindowOffset(0);
       }
       if (densityData?.buckets) {
         setDensityBuckets(densityData.buckets);
@@ -206,6 +214,59 @@ export default function Home() {
     setIsLoading(true);
     fetchData();
   }, [fetchData]);
+
+  // Load a window of screenshots centered on target offset
+  const loadWindowAtOffset = useCallback(async (targetOffset: number, totalCount?: number) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setIsLoadingWindow(true);
+
+    try {
+      const total = totalCount ?? totalSnapshots;
+      const halfWindow = Math.floor(WINDOW_SIZE / 2);
+      const maxOffset = Math.max(0, total - WINDOW_SIZE);
+      const startOffset = Math.max(0, Math.min(targetOffset - halfWindow, maxOffset));
+
+      const data = await getScreenshots(WINDOW_SIZE, startOffset, undefined, undefined, visibilityFilter);
+      if (data?.screenshots) {
+        setSnapshots(data.screenshots);
+        setWindowOffset(startOffset);
+        setTotalSnapshots(data.total);
+      }
+    } finally {
+      loadingRef.current = false;
+      setIsLoadingWindow(false);
+    }
+  }, [visibilityFilter, totalSnapshots]);
+
+  // Ensure the window covers the target index, prefetching if needed
+  const ensureWindowCoversIndex = useCallback(async (targetIndex: number) => {
+    const localIndex = targetIndex - windowOffset;
+    const windowEnd = windowOffset + snapshots.length;
+
+    // Out of bounds - load new window centered on target
+    if (localIndex < 0 || localIndex >= snapshots.length) {
+      await loadWindowAtOffset(targetIndex);
+      return;
+    }
+
+    // Prefetch near start of window
+    if (localIndex < PREFETCH_THRESHOLD && windowOffset > 0) {
+      loadWindowAtOffset(targetIndex); // Fire and forget
+    }
+
+    // Prefetch near end of window
+    if (localIndex > snapshots.length - PREFETCH_THRESHOLD && windowEnd < totalSnapshots) {
+      loadWindowAtOffset(targetIndex); // Fire and forget
+    }
+  }, [windowOffset, snapshots.length, totalSnapshots, loadWindowAtOffset]);
+
+  // Navigate timeline by delta (positive = older, negative = newer)
+  const navigateTimeline = useCallback(async (delta: number) => {
+    const newIndex = Math.max(0, Math.min(totalSnapshots - 1, currentIndex + delta));
+    setCurrentIndex(newIndex);
+    ensureWindowCoversIndex(newIndex);
+  }, [currentIndex, totalSnapshots, ensureWindowCoversIndex]);
 
   // Fetch gallery snapshots for search view when query is empty
   useEffect(() => {
@@ -430,22 +491,36 @@ export default function Home() {
         const step = (e.metaKey || e.ctrlKey) && e.shiftKey ? fastJump : e.shiftKey ? 10 : 1;
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          setCurrentIndex(i => Math.min(totalSnapshots - 1, i + step));
+          navigateTimeline(step);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
-          setCurrentIndex(i => Math.max(0, i - step));
+          navigateTimeline(-step);
         } else if (e.key === 'Home') {
           e.preventDefault();
-          setCurrentIndex(totalSnapshots - 1);
+          // Jump to oldest - need to load window first
+          const targetIndex = totalSnapshots - 1;
+          const localIdx = targetIndex - windowOffset;
+          if (localIdx < 0 || localIdx >= snapshots.length) {
+            loadWindowAtOffset(targetIndex).then(() => setCurrentIndex(targetIndex));
+          } else {
+            setCurrentIndex(targetIndex);
+          }
         } else if (e.key === 'End') {
           e.preventDefault();
-          setCurrentIndex(0);
+          // Jump to newest - need to load window first
+          const targetIndex = 0;
+          const localIdx = targetIndex - windowOffset;
+          if (localIdx < 0 || localIdx >= snapshots.length) {
+            loadWindowAtOffset(targetIndex).then(() => setCurrentIndex(targetIndex));
+          } else {
+            setCurrentIndex(targetIndex);
+          }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeView, selectedImage, query, totalSnapshots, selection, incognitoStatus.active]);
+  }, [activeView, selectedImage, query, totalSnapshots, selection, incognitoStatus.active, navigateTimeline, windowOffset, snapshots.length, loadWindowAtOffset]);
 
   const handleRecordingToggle = async () => {
     try {
@@ -498,12 +573,33 @@ export default function Home() {
           setGalleryTotal(prev => Math.max(0, prev - ids.length));
         }
       } else if (activeView === 'timeline') {
-        setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+        // Filter out deleted items
+        const currentSnapshotsFiltered = snapshots.filter(s => !idSet.has(s.id));
+        const newTotal = Math.max(0, totalSnapshots - ids.length);
+
+        // Calculate what the local index will be after removal
+        const newLocalIndex = currentIndex - windowOffset;
+
+        // If we're running low on items in the window, or local index is now out of bounds
+        if (currentSnapshotsFiltered.length < 50 || newLocalIndex >= currentSnapshotsFiltered.length) {
+          // Reload window centered on current position
+          const safeIndex = Math.min(currentIndex, newTotal - 1);
+          loadWindowAtOffset(Math.max(0, safeIndex), newTotal);
+          setCurrentIndex(Math.max(0, safeIndex));
+        } else {
+          // Just update the snapshots in place
+          setSnapshots(currentSnapshotsFiltered);
+        }
+
+        // Update total count
+        setTotalSnapshots(newTotal);
       }
 
       selection.clearSelection();
-      // Refresh background data (for totals, stats etc.)
-      fetchData();
+      // Refresh density data only (not the full window which would reset position)
+      getDensity(100, visibilityFilter).then(data => {
+        if (data?.buckets) setDensityBuckets(data.buckets);
+      });
     } catch (err) {
       console.error('Failed to delete screenshots:', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -531,13 +627,34 @@ export default function Home() {
             setGalleryTotal(prev => Math.max(0, prev - ids.length));
           }
         } else if (activeView === 'timeline') {
-          setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+          // Filter out hidden items
+          const currentSnapshotsFiltered = snapshots.filter(s => !idSet.has(s.id));
+          const newTotal = Math.max(0, totalSnapshots - ids.length);
+
+          // Calculate what the local index will be after removal
+          const newLocalIndex = currentIndex - windowOffset;
+
+          // If we're running low on items in the window, or local index is now out of bounds
+          if (currentSnapshotsFiltered.length < 50 || newLocalIndex >= currentSnapshotsFiltered.length) {
+            // Reload window centered on current position
+            const safeIndex = Math.min(currentIndex, newTotal - 1);
+            loadWindowAtOffset(Math.max(0, safeIndex), newTotal);
+            setCurrentIndex(Math.max(0, safeIndex));
+          } else {
+            // Just update the snapshots in place
+            setSnapshots(currentSnapshotsFiltered);
+          }
+
+          // Update total count
+          setTotalSnapshots(newTotal);
         }
       }
 
       selection.clearSelection();
-      // Refresh background data (for totals, stats etc.)
-      fetchData();
+      // Refresh density data only (not the full window which would reset position)
+      getDensity(100, visibilityFilter).then(data => {
+        if (data?.buckets) setDensityBuckets(data.buckets);
+      });
     } catch (err) {
       console.error('Failed to hide screenshots:', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -565,13 +682,34 @@ export default function Home() {
             setGalleryTotal(prev => Math.max(0, prev - ids.length));
           }
         } else if (activeView === 'timeline') {
-          setSnapshots(prev => prev.filter(s => !idSet.has(s.id)));
+          // Filter out unhidden items
+          const currentSnapshotsFiltered = snapshots.filter(s => !idSet.has(s.id));
+          const newTotal = Math.max(0, totalSnapshots - ids.length);
+
+          // Calculate what the local index will be after removal
+          const newLocalIndex = currentIndex - windowOffset;
+
+          // If we're running low on items in the window, or local index is now out of bounds
+          if (currentSnapshotsFiltered.length < 50 || newLocalIndex >= currentSnapshotsFiltered.length) {
+            // Reload window centered on current position
+            const safeIndex = Math.min(currentIndex, newTotal - 1);
+            loadWindowAtOffset(Math.max(0, safeIndex), newTotal);
+            setCurrentIndex(Math.max(0, safeIndex));
+          } else {
+            // Just update the snapshots in place
+            setSnapshots(currentSnapshotsFiltered);
+          }
+
+          // Update total count
+          setTotalSnapshots(newTotal);
         }
       }
 
       selection.clearSelection();
-      // Refresh background data (for totals, stats etc.)
-      fetchData();
+      // Refresh density data only (not the full window which would reset position)
+      getDensity(100, visibilityFilter).then(data => {
+        if (data?.buckets) setDensityBuckets(data.buckets);
+      });
     } catch (err) {
       console.error('Failed to unhide screenshots:', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -599,9 +737,21 @@ export default function Home() {
       await Promise.all(promises);
 
       selection.clearSelection();
-      // Refresh data
-      await fetchData();
-      if (activeView === 'search') {
+
+      // Update is_hidden flag in place for timeline view (all filter shows both)
+      if (activeView === 'timeline') {
+        const hiddenSet = new Set(hiddenIds);
+        const visibleSet = new Set(visibleIds);
+        setSnapshots(prev => prev.map(s => {
+          if (hiddenSet.has(s.id)) return { ...s, is_hidden: false };
+          if (visibleSet.has(s.id)) return { ...s, is_hidden: true };
+          return s;
+        }));
+        // Refresh density data only
+        getDensity(100, visibilityFilter).then(data => {
+          if (data?.buckets) setDensityBuckets(data.buckets);
+        });
+      } else if (activeView === 'search') {
         if (query.trim()) {
           const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter);
           setSearchResults(data?.results || []);
@@ -749,55 +899,32 @@ export default function Home() {
 
   // Navigate to a specific screenshot in the timeline
   const navigateToTimeline = useCallback(async (screenshot: Screenshot) => {
-    // First, try to find the screenshot in the current snapshots by ID
-    const existingIndex = snapshots.findIndex(s => s.id === screenshot.id);
+    try {
+      // Get the target screenshot's offset (position in full sorted list)
+      const { offset: targetOffset } = await getScreenshotOffset(screenshot.id, visibilityFilter);
 
-    if (existingIndex !== -1) {
-      // Found in current data - just navigate
-      setCurrentIndex(existingIndex);
+      // Load window centered on this screenshot
+      await loadWindowAtOffset(targetOffset);
+
+      // Set the index and highlight
+      setCurrentIndex(targetOffset);
       setHighlightedId(screenshot.id);
       setActiveView('timeline');
       setSelectedImage(null);
-      // Clear highlight after 2 seconds
       setTimeout(() => setHighlightedId(null), 2000);
-      return;
-    }
-
-    // Not in current data - we need to load screenshots around that timestamp
-    // The timeline is sorted newest first, so we need to find the offset
-    try {
-      // Fetch screenshots starting from around the target timestamp
-      // We'll get a batch that includes the target
-      const response = await getScreenshots(500, 0);
-      if (response?.screenshots) {
-        setSnapshots(response.screenshots);
-        setTotalSnapshots(response.total);
-
-        // Find the index again in the new data
-        const newIndex = response.screenshots.findIndex((s: Screenshot) => s.id === screenshot.id);
-        if (newIndex !== -1) {
-          setCurrentIndex(newIndex);
-          setHighlightedId(screenshot.id);
-          setActiveView('timeline');
-          setSelectedImage(null);
-          setTimeout(() => setHighlightedId(null), 2000);
-        } else {
-          // Still not found - maybe it's older than our limit
-          // Just switch to timeline at the start
-          setCurrentIndex(0);
-          setActiveView('timeline');
-          setSelectedImage(null);
-        }
-      }
     } catch (err) {
-      console.error('Failed to load screenshots for timeline navigation:', err);
+      console.error('Failed to navigate to timeline:', err);
       // Fallback - just switch to timeline
       setActiveView('timeline');
       setSelectedImage(null);
     }
-  }, [snapshots]);
+  }, [visibilityFilter, loadWindowAtOffset]);
 
-  const currentSnapshot = snapshots.length > 0 ? snapshots[currentIndex] : null;
+  // Calculate local index within the loaded window
+  const localIndex = currentIndex - windowOffset;
+  const currentSnapshot = (snapshots.length > 0 && localIndex >= 0 && localIndex < snapshots.length)
+    ? snapshots[localIndex]
+    : null;
   const maxCount = densityBuckets.length > 0
     ? Math.max(...densityBuckets.map(b => b.count), 1)
     : 1;
@@ -1004,7 +1131,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="text-center">
-                  {isLoading ? (
+                  {isLoading || isLoadingWindow ? (
                     <>
                       <div className="w-6 h-6 border-2 border-[#86efac]/30 border-t-[#86efac] rounded-full animate-spin mx-auto mb-2" />
                       <p className="text-[#555] text-sm">Loading snapshots...</p>
@@ -1023,7 +1150,7 @@ export default function Home() {
             <div className="px-4 py-3 bg-[#080808] border-t border-[#1e1e1e]">
               <div className="flex items-center gap-3 mb-2">
                 <button
-                  onClick={() => setCurrentIndex(i => Math.min(totalSnapshots - 1, i + 1))}
+                  onClick={() => navigateTimeline(1)}
                   disabled={currentIndex >= totalSnapshots - 1}
                   className="p-1.5 rounded bg-[#0f0f0f] text-[#8a8a8a] hover:text-[#f5f5f5] disabled:opacity-30 transition-colors"
                 >
@@ -1032,7 +1159,7 @@ export default function Home() {
                   </svg>
                 </button>
                 <button
-                  onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
+                  onClick={() => navigateTimeline(-1)}
                   disabled={currentIndex <= 0}
                   className="p-1.5 rounded bg-[#0f0f0f] text-[#8a8a8a] hover:text-[#f5f5f5] disabled:opacity-30 transition-colors"
                 >
@@ -1046,14 +1173,21 @@ export default function Home() {
               {/* Density Timeline */}
               <div
                 className="relative h-10 bg-[#0f0f0f] rounded cursor-pointer overflow-hidden"
-                onClick={(e) => {
+                onClick={async (e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = e.clientX - rect.left;
                   const percentage = Math.max(0, Math.min(1, x / rect.width));
                   // Left = older (high index), Right = newer (low index)
                   // percentage 0 (left) → index N-1 (oldest)
                   // percentage 1 (right) → index 0 (newest)
-                  setCurrentIndex(Math.round((1 - percentage) * (totalSnapshots - 1)));
+                  const targetIndex = Math.round((1 - percentage) * (totalSnapshots - 1));
+
+                  // Check if target is outside current window
+                  const localIdx = targetIndex - windowOffset;
+                  if (localIdx < 0 || localIdx >= snapshots.length) {
+                    await loadWindowAtOffset(targetIndex);
+                  }
+                  setCurrentIndex(targetIndex);
                 }}
               >
                 <div className="absolute inset-0 flex items-end gap-px px-1 py-1">
