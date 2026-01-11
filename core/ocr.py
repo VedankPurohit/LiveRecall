@@ -128,12 +128,10 @@ class OCRService:
         """Get the default provider name based on platform"""
         system = platform.system()
 
-        if system == "Darwin":  # macOS
-            if "apple_vision" in self._providers:
-                return "apple_vision"
-        elif system == "Windows":
-            if "tesseract" in self._providers:
-                return "tesseract"
+        if system == "Darwin" and "apple_vision" in self._providers:
+            return "apple_vision"
+        elif system == "Windows" and "tesseract" in self._providers:
+            return "tesseract"
 
         # Fallback to tesseract if available
         if "tesseract" in self._providers:

@@ -152,6 +152,7 @@ describe('API Client', () => {
         limit: 50,
         safe_mode: false,
         safe_mode_level: 'low',
+        search_mode: 'auto',
         start_date: '2024-01-01',
         end_date: '2024-12-31',
         visibility: 'visible_only',

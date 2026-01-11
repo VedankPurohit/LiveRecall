@@ -99,6 +99,8 @@ async def search_screenshots(request: SearchRequest):
     try:
         if search_mode == "image":
             # Pure image search (legacy behavior)
+            if image_embedding is None:
+                raise HTTPException(status_code=500, detail="Failed to generate image embedding")
             results = db.search_similar(
                 image_embedding,
                 limit=search_limit,
@@ -123,6 +125,8 @@ async def search_screenshots(request: SearchRequest):
 
         elif search_mode == "text_semantic":
             # Pure BGE text semantic search
+            if text_embedding is None:
+                raise HTTPException(status_code=500, detail="Failed to generate text embedding")
             results = db.search_text_embeddings(
                 query_embedding=text_embedding,
                 limit=search_limit,
