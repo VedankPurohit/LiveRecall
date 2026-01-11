@@ -131,10 +131,26 @@ def is_loaded() -> bool:
     return _model is not None
 
 
+def is_downloaded() -> bool:
+    """Check if the CLIP model is downloaded in HuggingFace cache"""
+    try:
+        from huggingface_hub import try_to_load_from_cache
+
+        # clip-ViT-L-14 maps to sentence-transformers/clip-ViT-L-14
+        model_id = "sentence-transformers/clip-ViT-L-14"
+
+        # Check for the sentence-transformers config file
+        result = try_to_load_from_cache(model_id, "config_sentence_transformers.json")
+        return result is not None
+    except Exception:
+        return False
+
+
 def get_model_status() -> dict:
     """Get detailed model status"""
     return {
         "loaded": _model is not None,
+        "downloaded": is_downloaded(),
         "device": _device,
         "last_used": _last_used,
         "idle_seconds": time.time() - _last_used if _last_used > 0 else 0,

@@ -56,6 +56,7 @@ Examples:
             host=args.host,
             port=args.port,
             reload=args.reload if not is_frozen() else False,
+            log_level="warning",  # Suppress verbose access logs
         )
     else:
         # Launch system tray (default)

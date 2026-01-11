@@ -113,13 +113,35 @@ class TrayApp:
             # Wait a moment for backend to be ready
             time.sleep(1)
 
-            # Check setup status via API
-            status = api_client.get_json("/setup/status")
+            # Check enhanced setup status via API (includes model and migration status)
+            status = api_client.get_json("/setup/enhanced-status")
 
-            if status and status.get("needs_setup", False):
+            if not status:
+                return
+
+            should_open_setup = False
+            reason = ""
+
+            # Check for version change
+            if status.get("needs_setup", False):
                 last_version = status.get("last_seen_version", "none")
                 current_version = status.get("current_version", "unknown")
-                print(f"Version change detected: {last_version} -> {current_version}")
+                reason = f"Version change detected: {last_version} -> {current_version}"
+                should_open_setup = True
+
+            # Check if CLIP model needs downloading (required for search)
+            elif status.get("clip_status") == "not_downloaded":
+                reason = "CLIP model needs downloading"
+                should_open_setup = True
+
+            # Check if OCR migration is needed
+            elif status.get("migration_status") and status["migration_status"].get("needs_migration", False):
+                pending = status["migration_status"].get("screenshots_without_ocr", 0)
+                reason = f"OCR migration needed for {pending} screenshots"
+                should_open_setup = True
+
+            if should_open_setup:
+                print(f"{reason}")
                 print("Opening setup page...")
                 webbrowser.open(f"{WEB_UI_URL}/setup")
         except Exception as e:

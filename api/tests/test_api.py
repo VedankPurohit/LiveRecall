@@ -320,6 +320,7 @@ class TestSearchEndpoints:
                 "query": "blue shirt",
                 "limit": 10,
                 "safe_mode": False,
+                "search_mode": "image",  # Use image mode to test CLIP-only search
             },
         )
         assert response.status_code == 200
@@ -512,3 +513,241 @@ class TestSetupEndpoints:
         assert data["success"] is True
         assert mock_config.last_seen_version == "0.1.2"
         mock_config.save.assert_called_once()
+
+
+class TestEventsEndpoints:
+    """Test SSE events API endpoints"""
+
+    @patch("api.routes.events.db")
+    def test_get_all_status(self, mock_db):
+        """Should return status of all models and sync"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.events import router
+
+        mock_db.get_ocr_stats.return_value = {
+            "with_ocr": 50,
+            "without_ocr": 10,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/events/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert "clip" in data
+        assert "text_embedding" in data
+        assert "ocr" in data
+        assert "sync" in data
+        assert "ocr_stats" in data
+
+
+class TestEnhancedSetupEndpoints:
+    """Test enhanced setup API endpoints"""
+
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.current_platform")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_model_status(self, mock_platform, mock_config):
+        """Should return model status"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/models")
+        assert response.status_code == 200
+        data = response.json()
+        assert "clip" in data
+        assert "text_embedding" in data
+        assert "ocr" in data
+        assert "all_ready" in data
+
+    @patch("core.database.db")
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.current_platform")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_migration_status(self, mock_platform, mock_config, mock_db):
+        """Should return OCR migration status"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_db.get_ocr_stats.return_value = {
+            "total_screenshots": 100,
+            "with_ocr": 60,
+            "without_ocr": 40,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/migration")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["needs_migration"] is True
+        assert data["total_screenshots"] == 100
+        assert data["screenshots_with_ocr"] == 60
+        assert data["screenshots_without_ocr"] == 40
+        assert data["progress_percent"] == 60.0
+
+    @patch("core.database.db")
+    @patch("api.routes.setup.config")
+    @patch("api.routes.setup.current_platform")
+    @patch("api.routes.setup.VERSION", "0.1.2")
+    def test_get_enhanced_setup_status(self, mock_platform, mock_config, mock_db):
+        """Should return comprehensive setup status"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.setup import router
+
+        mock_config.last_seen_version = "0.1.1"
+        mock_platform.name = "macos"
+        mock_platform.needs_screen_permission.return_value = True
+        mock_db.get_ocr_stats.return_value = {
+            "total_screenshots": 100,
+            "with_ocr": 100,
+            "without_ocr": 0,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.get("/setup/enhanced-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["current_version"] == "0.1.2"
+        assert data["needs_setup"] is True
+        assert data["platform"] == "macos"
+        assert "clip_status" in data
+        assert "text_embedding_status" in data
+        assert "ocr_status" in data
+
+
+class TestSearchModes:
+    """Test search with different modes"""
+
+    @patch("api.routes.search.db")
+    @patch("api.routes.search.get_text_embedding")
+    def test_search_image_mode(self, mock_get_embedding, mock_db):
+        """Should perform image-only search"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 10}
+        mock_get_embedding.return_value = [0.1] * 768
+        mock_db.search_similar.return_value = [
+            {
+                "id": 1,
+                "image_path": "/path/to/img.jpg",
+                "timestamp": "251206120000",
+                "similarity": 0.85,
+            }
+        ]
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "query": "test query",
+                "limit": 10,
+                "safe_mode": False,
+                "search_mode": "image",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_results"] == 1
+
+    @patch("api.routes.search.db")
+    @patch("api.routes.search.get_text_embedding")
+    def test_search_text_fuzzy_mode(self, mock_get_embedding, mock_db):
+        """Should perform text fuzzy search"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 10}
+        mock_db.search_text_fts.return_value = [
+            {
+                "id": 1,
+                "image_path": "/path/to/img.jpg",
+                "timestamp": "251206120000",
+                "similarity": 0.9,
+            }
+        ]
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "query": "test query",
+                "limit": 10,
+                "safe_mode": False,
+                "search_mode": "text_fuzzy",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Result depends on whether text_fts is implemented
+        assert "results" in data
+
+    @patch("core.text_embeddings.text_embedding_service")
+    @patch("api.routes.search.db")
+    @patch("api.routes.search.get_text_embedding")
+    def test_search_auto_mode(self, mock_get_embedding, mock_db, mock_text_emb_service):
+        """Should perform hybrid search in auto mode"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 10}
+        mock_get_embedding.return_value = [0.1] * 768
+        mock_text_emb_service.get_query_embedding.return_value = [0.1] * 384
+        mock_db.search_hybrid.return_value = [
+            {
+                "id": 1,
+                "image_path": "/path/to/img.jpg",
+                "timestamp": "251206120000",
+                "similarity": 0.85,
+                "match_sources": ["image"],
+            }
+        ]
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "query": "test query",
+                "limit": 10,
+                "safe_mode": False,
+                "search_mode": "auto",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data

@@ -14,6 +14,7 @@ import type {
   VisibilityFilter,
   IncognitoStatus,
   BulkOperationResponse,
+  SearchMode,
 } from '@/types';
 
 const API_BASE = '/api/v1';
@@ -77,7 +78,8 @@ export async function search(
   safeModeLevel?: string,
   startDate?: string,
   endDate?: string,
-  visibility: VisibilityFilter = 'visible_only'
+  visibility: VisibilityFilter = 'visible_only',
+  searchMode: SearchMode = 'auto'
 ): Promise<SearchResult> {
   return fetchApi('/search', {
     method: 'POST',
@@ -89,6 +91,7 @@ export async function search(
       start_date: startDate,
       end_date: endDate,
       visibility,
+      search_mode: searchMode,
     }),
   });
 }
@@ -104,6 +107,7 @@ export async function searchWithParams(params: SearchParams): Promise<SearchResu
       start_date: params.start_date,
       end_date: params.end_date,
       visibility: params.visibility ?? 'visible_only',
+      search_mode: params.search_mode ?? 'auto',
     }),
   });
 }

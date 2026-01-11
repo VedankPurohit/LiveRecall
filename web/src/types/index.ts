@@ -139,6 +139,9 @@ export interface DensityResponse {
   max_date: string | null;
 }
 
+// Search mode options
+export type SearchMode = 'auto' | 'image' | 'text_fuzzy' | 'text_semantic';
+
 // Search with date filters
 export interface SearchParams {
   query: string;
@@ -148,6 +151,7 @@ export interface SearchParams {
   start_date?: string;
   end_date?: string;
   visibility?: VisibilityFilter;
+  search_mode?: SearchMode;
 }
 
 // Bulk operations
