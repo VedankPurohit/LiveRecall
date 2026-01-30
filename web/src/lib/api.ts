@@ -15,6 +15,13 @@ import type {
   IncognitoStatus,
   BulkOperationResponse,
   SearchMode,
+  AnalyticsOverview,
+  AnalyticsStorage,
+  AnalyticsActivity,
+  AnalyticsGaps,
+  AnalyticsQuality,
+  AnalyticsTrends,
+  AnalyticsActivityWeek,
 } from '@/types';
 
 const API_BASE = '/api/v1';
@@ -273,4 +280,33 @@ export async function setIncognitoMode(durationMinutes: number): Promise<ApiResp
 
 export async function stopIncognitoMode(): Promise<ApiResponse<void>> {
   return fetchApi('/incognito/stop', { method: 'POST' });
+}
+
+// Analytics
+export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
+  return fetchApi('/analytics/overview');
+}
+
+export async function getAnalyticsStorage(days: number = 30): Promise<AnalyticsStorage> {
+  return fetchApi(`/analytics/storage?days=${days}`);
+}
+
+export async function getAnalyticsActivity(weeks: number = 12): Promise<AnalyticsActivity> {
+  return fetchApi(`/analytics/activity?weeks=${weeks}`);
+}
+
+export async function getAnalyticsGaps(minGapMinutes: number = 30, limit: number = 50): Promise<AnalyticsGaps> {
+  return fetchApi(`/analytics/gaps?min_gap_minutes=${minGapMinutes}&limit=${limit}`);
+}
+
+export async function getAnalyticsQuality(): Promise<AnalyticsQuality> {
+  return fetchApi('/analytics/quality');
+}
+
+export async function getAnalyticsTrends(days: number = 30): Promise<AnalyticsTrends> {
+  return fetchApi(`/analytics/trends?days=${days}`);
+}
+
+export async function getAnalyticsActivityWeek(weekOffset: number = 0): Promise<AnalyticsActivityWeek> {
+  return fetchApi(`/analytics/activity-week?week_offset=${weekOffset}`);
 }
