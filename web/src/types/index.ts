@@ -160,3 +160,155 @@ export interface BulkOperationResponse {
   affected_count: number;
   message: string;
 }
+
+// Analytics Types
+export interface AnalyticsOverview {
+  total_screenshots: number;
+  total_storage_bytes: number;
+  compressed_count: number;
+  avg_file_size: number;
+  screenshots_today: number;
+  screenshots_yesterday: number;
+  screenshots_this_week: number;
+  ocr_processed_count: number;
+}
+
+export interface DailyStorageData {
+  date: string;
+  screenshots: number;
+  bytes_added: number;
+  cumulative_bytes: number;
+}
+
+export interface LargestFile {
+  id: number;
+  path: string;
+  timestamp: string;
+  size_bytes: number;
+}
+
+export interface StorageByMonth {
+  month: string;
+  count: number;
+}
+
+export interface AnalyticsStorage {
+  daily_data: DailyStorageData[];
+  compression: {
+    compressed_count: number;
+    uncompressed_count: number;
+    original_bytes: number;
+    current_bytes: number;
+    bytes_saved: number;
+  };
+  largest_files: LargestFile[];
+  storage_by_month: StorageByMonth[];
+}
+
+export interface HeatmapData {
+  day_of_week: number;
+  hour: number;
+  count: number;
+}
+
+export interface HourlyData {
+  hour: number;
+  count: number;
+}
+
+export interface DailyData {
+  day: number;
+  count: number;
+}
+
+export interface WeeklyTrend {
+  week: string;
+  count: number;
+}
+
+export interface AnalyticsActivity {
+  heatmap_data: HeatmapData[];
+  hourly_distribution: HourlyData[];
+  daily_distribution: DailyData[];
+  weekly_trend: WeeklyTrend[];
+  peak_hour: number;
+  peak_day: string;
+  total_in_period: number;
+}
+
+export interface Gap {
+  start_time: string;
+  end_time: string;
+  duration_seconds: number;
+  type: 'gap' | 'incognito';
+}
+
+export interface AnalyticsGaps {
+  gaps: Gap[];
+  total_gap_time_seconds: number;
+  longest_gap_seconds: number;
+  avg_gap_seconds: number;
+  gap_count: number;
+}
+
+export interface SizeDistribution {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AnalyticsQuality {
+  avg_file_size: number;
+  min_file_size: number;
+  max_file_size: number;
+  median_file_size: number;
+  size_distribution: SizeDistribution[];
+  total_files: number;
+  compression_stats: {
+    compressed_count: number;
+    uncompressed_count: number;
+    original_bytes_before_compression: number;
+  };
+}
+
+export interface TrendDailyData {
+  date: string;
+  count: number;
+  moving_avg: number;
+}
+
+export interface AnalyticsTrends {
+  daily_data: TrendDailyData[];
+  summary: {
+    total_screenshots: number;
+    synced_count: number;
+    ocr_processed_count: number;
+    avg_per_day: number;
+    days_with_recordings: number;
+    best_day: { date: string | null; count: number };
+    worst_day: { date: string | null; count: number } | null;
+  };
+}
+
+// Week-specific activity data
+export interface WeekHeatmapCell {
+  date: string;
+  day_of_week: number;
+  day_label: string;
+  hour: number;
+  count: number;
+  screenshot_ids: number[];
+}
+
+export interface AnalyticsActivityWeek {
+  week_start: string;
+  week_end: string;
+  week_offset: number;
+  heatmap_data: WeekHeatmapCell[];
+  total_screenshots: number;
+  peak: {
+    day: string;
+    hour: number;
+    count: number;
+  } | null;
+}

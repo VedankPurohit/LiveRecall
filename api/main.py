@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import compression, events, incognito, recording, screenshots, search, setup, status, sync
+from api.routes import analytics, compression, events, incognito, recording, screenshots, search, setup, status, sync
 from core.database import db
 
 
@@ -138,6 +138,7 @@ app.include_router(compression.router, prefix="/api/v1")
 app.include_router(incognito.router, prefix="/api/v1")
 app.include_router(setup.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
+app.include_router(analytics.router, prefix="/api/v1")
 
 
 # Serve static web UI if available

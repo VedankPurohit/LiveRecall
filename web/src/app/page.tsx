@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   getStatus,
   getSyncStatus,
@@ -46,9 +47,16 @@ const SAFE_MODE_LEVELS = [
   { value: 'extreme', label: 'Extreme' },
 ];
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeView, setActiveView] = useState<'timeline' | 'search'>('timeline');
   const [status, setStatus] = useState<SystemStatus | null>(null);
+
+  // Timeline date filter from URL params (for heatmap navigation)
+  const [timelineStartDate, setTimelineStartDate] = useState<string | undefined>();
+  const [timelineEndDate, setTimelineEndDate] = useState<string | undefined>();
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [snapshots, setSnapshots] = useState<Screenshot[]>([]);
   const [densityBuckets, setDensityBuckets] = useState<DensityBucket[]>([]);
@@ -146,6 +154,26 @@ export default function Home() {
       setVisibilityFilter(savedVisibilityFilter as VisibilityFilter);
     }
   }, []);
+
+  // Read URL params for timeline date filter (from analytics heatmap clicks)
+  useEffect(() => {
+    const start = searchParams.get('start');
+    const end = searchParams.get('end');
+    if (start && end) {
+      setTimelineStartDate(start);
+      setTimelineEndDate(end);
+      // Switch to search/gallery view to show filtered results
+      setActiveView('search');
+    }
+  }, [searchParams]);
+
+  // Clear timeline date filter
+  const clearTimelineFilter = useCallback(() => {
+    setTimelineStartDate(undefined);
+    setTimelineEndDate(undefined);
+    // Clear URL params
+    router.push('/', { scroll: false });
+  }, [router]);
 
   // Fetch incognito status
   useEffect(() => {
@@ -288,7 +316,7 @@ export default function Home() {
           setGalleryOffset(0);
           setHasMoreGallery(true);
           setHasMoreGalleryBefore(false); // Starting from offset 0, nothing before
-          const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
+          const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, timelineStartDate, timelineEndDate, visibilityFilter);
           if (data?.screenshots) {
             setGallerySnapshots(data.screenshots);
             setGalleryTotal(data.total);
@@ -300,7 +328,7 @@ export default function Home() {
       };
       fetchGallery();
     }
-  }, [activeView, query, visibilityFilter]);
+  }, [activeView, query, visibilityFilter, timelineStartDate, timelineEndDate]);
 
   // Load more gallery images for infinite scroll
   // galleryOffset is the START of the loaded window, so next offset is galleryOffset + current count
@@ -311,7 +339,7 @@ export default function Home() {
     try {
       // Calculate next offset based on start offset + current loaded count
       const nextOffset = galleryOffset + gallerySnapshots.length;
-      const data = await getScreenshots(GALLERY_PAGE_SIZE, nextOffset, undefined, undefined, visibilityFilter);
+      const data = await getScreenshots(GALLERY_PAGE_SIZE, nextOffset, timelineStartDate, timelineEndDate, visibilityFilter);
 
       if (data?.screenshots?.length) {
         setGallerySnapshots(prev => [...prev, ...data.screenshots]);
@@ -326,7 +354,7 @@ export default function Home() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMoreGallery, galleryOffset, visibilityFilter, query, gallerySnapshots.length]);
+  }, [isLoadingMore, hasMoreGallery, galleryOffset, visibilityFilter, query, gallerySnapshots.length, timelineStartDate, timelineEndDate]);
 
   // Load more gallery images before current position (for bidirectional scroll)
   const loadMoreGalleryBefore = useCallback(async () => {
@@ -344,7 +372,7 @@ export default function Home() {
       // This is more reliable than tracking scrollHeight which can change if user scrolls during fetch
       const firstVisibleId = gallerySnapshots[0]?.id;
 
-      const data = await getScreenshots(loadCount, newOffset, undefined, undefined, visibilityFilter);
+      const data = await getScreenshots(loadCount, newOffset, timelineStartDate, timelineEndDate, visibilityFilter);
 
       if (data?.screenshots?.length) {
         // Prepend to existing screenshots
@@ -369,7 +397,7 @@ export default function Home() {
     } finally {
       setIsLoadingMoreBefore(false);
     }
-  }, [isLoadingMoreBefore, hasMoreGalleryBefore, galleryOffset, visibilityFilter, query, gallerySnapshots]);
+  }, [isLoadingMoreBefore, hasMoreGalleryBefore, galleryOffset, visibilityFilter, query, gallerySnapshots, timelineStartDate, timelineEndDate]);
 
   // Intersection observer for infinite scroll (load more at bottom)
   // Note: We check isLoadingMore and call loadMoreGallery inside the callback,
@@ -762,7 +790,7 @@ export default function Home() {
           const data = await search(query, 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter, searchMode);
           setSearchResults(data?.results || []);
         } else {
-          const data = await getScreenshots(100, 0, undefined, undefined, visibilityFilter);
+          const data = await getScreenshots(100, 0, timelineStartDate, timelineEndDate, visibilityFilter);
           if (data?.screenshots) {
             setGallerySnapshots(data.screenshots);
             setGalleryTotal(data.total);
@@ -834,7 +862,7 @@ export default function Home() {
       const startOffset = Math.max(0, targetOffset - Math.floor(GALLERY_PAGE_SIZE / 2));
 
       // Load screenshots around the target position
-      const data = await getScreenshots(GALLERY_PAGE_SIZE * 2, startOffset, undefined, undefined, visibilityFilter);
+      const data = await getScreenshots(GALLERY_PAGE_SIZE * 2, startOffset, timelineStartDate, timelineEndDate, visibilityFilter);
 
       if (data?.screenshots) {
         // Verify target is in loaded data
@@ -889,7 +917,7 @@ export default function Home() {
 
       // Fallback to loading from start
       try {
-        const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, undefined, undefined, visibilityFilter);
+        const data = await getScreenshots(GALLERY_PAGE_SIZE, 0, timelineStartDate, timelineEndDate, visibilityFilter);
         if (data?.screenshots) {
           setGallerySnapshots(data.screenshots);
           setGalleryTotal(data.total);
@@ -901,7 +929,7 @@ export default function Home() {
         console.error('Fallback gallery load failed:', fallbackErr);
       }
     }
-  }, [visibilityFilter]);
+  }, [visibilityFilter, timelineStartDate, timelineEndDate]);
 
   // Navigate to a specific screenshot in the timeline
   const navigateToTimeline = useCallback(async (screenshot: Screenshot) => {
@@ -1014,6 +1042,12 @@ export default function Home() {
               >
                 Search
               </button>
+              <Link
+                href="/analytics"
+                className="px-4 py-2 text-sm font-medium rounded-lg text-[#8a8a8a] hover:text-[#f5f5f5] hover:bg-[#1c1c1c] transition-all"
+              >
+                Analytics
+              </Link>
             </nav>
           </div>
 
@@ -1265,9 +1299,14 @@ export default function Home() {
                 {['1h', '24h', '7d', '30d', 'all'].map((preset) => (
                   <button
                     key={preset}
-                    onClick={() => handleDatePreset(preset)}
+                    onClick={() => {
+                      handleDatePreset(preset);
+                      // Clear custom date filter when using presets
+                      setTimelineStartDate(undefined);
+                      setTimelineEndDate(undefined);
+                    }}
                     className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                      datePreset === preset
+                      datePreset === preset && !timelineStartDate
                         ? 'bg-[#86efac]/20 text-[#86efac]'
                         : 'text-[#555] hover:text-[#8a8a8a]'
                     }`}
@@ -1275,6 +1314,49 @@ export default function Home() {
                     {preset === 'all' ? 'All' : preset}
                   </button>
                 ))}
+                {/* Custom date range button/chip */}
+                {timelineStartDate && timelineEndDate ? (
+                  <button
+                    onClick={() => setShowDateRangePicker(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-[#86efac]/20 text-[#86efac] hover:bg-[#86efac]/30 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    {(() => {
+                      const parseTs = (ts: string) => {
+                        if (ts.length !== 12) return null;
+                        return new Date(2000 + parseInt(ts.slice(0, 2)), parseInt(ts.slice(2, 4)) - 1, parseInt(ts.slice(4, 6)), parseInt(ts.slice(6, 8)), parseInt(ts.slice(8, 10)));
+                      };
+                      const start = parseTs(timelineStartDate);
+                      const end = parseTs(timelineEndDate);
+                      if (!start || !end) return 'Custom';
+                      const sameDay = start.toDateString() === end.toDateString();
+                      if (sameDay) return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${start.getHours()}:${String(start.getMinutes()).padStart(2,'0')}-${end.getHours()}:${String(end.getMinutes()).padStart(2,'0')}`;
+                      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                    })()}
+                    <svg
+                      className="w-3 h-3 text-[#86efac]/60 hover:text-[#ef4444]"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      onClick={(e) => { e.stopPropagation(); clearTimelineFilter(); }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowDateRangePicker(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded text-xs text-[#555] hover:text-[#8a8a8a] transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    Custom
+                  </button>
+                )}
               </div>
               {/* Safe mode controls */}
               <div className="flex items-center gap-2">
@@ -1321,7 +1403,7 @@ export default function Home() {
                   {searchTime != null && <span className="ml-2 text-[#444]">{searchTime.toFixed(0)}ms</span>}
                 </>
               ) : (
-                <>{galleryTotal} snapshots (gallery)</>
+                <>{galleryTotal} snapshots {timelineStartDate ? '(filtered)' : '(gallery)'}</>
               )}
             </div>
 
@@ -1548,6 +1630,34 @@ export default function Home() {
               </svg>
               View Text
             </button>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                // Use the screenshot's image path as a search proxy
+                // Set up image search mode and search by image path identifier
+                setSelectedImage(null);
+                setActiveView('search');
+                setSearchMode('image');
+                // Create a query that would trigger similar image search
+                // In absence of a dedicated API, we use the timestamp as context
+                const ts = selectedImage.timestamp;
+                if (ts && ts.length === 12) {
+                  const year = 2000 + parseInt(ts.slice(0, 2));
+                  const month = parseInt(ts.slice(2, 4));
+                  const day = parseInt(ts.slice(4, 6));
+                  const hour = parseInt(ts.slice(6, 8));
+                  const date = new Date(year, month - 1, day, hour);
+                  const searchTerm = date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
+                  setQuery(searchTerm);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#06b6d4]/10 hover:bg-[#06b6d4]/20 text-[#06b6d4] rounded text-xs border border-[#06b6d4]/30 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              Find Similar
+            </button>
           </div>
         </div>
       )}
@@ -1643,6 +1753,148 @@ export default function Home() {
         isLoading={isBulkOperationLoading}
       />
 
+      {/* Date Range Picker Modal */}
+      {showDateRangePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowDateRangePicker(false)}
+          />
+          <div className="relative bg-[#0f0f0f] border border-[#2a2a2a] rounded-xl p-5 w-[420px] max-w-[90vw] shadow-2xl">
+            <h3 className="text-lg font-medium text-[#f5f5f5] mb-4">Set Date Range</h3>
+
+            <div className="space-y-4">
+              {/* Start Date/Time */}
+              <div>
+                <label className="block text-xs text-[#8a8a8a] mb-2">Start</label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    id="range-start-date"
+                    defaultValue={(() => {
+                      if (!timelineStartDate || timelineStartDate.length !== 12) {
+                        const d = new Date();
+                        d.setDate(d.getDate() - 1);
+                        return d.toISOString().split('T')[0];
+                      }
+                      const year = 2000 + parseInt(timelineStartDate.slice(0, 2));
+                      return `${year}-${timelineStartDate.slice(2, 4)}-${timelineStartDate.slice(4, 6)}`;
+                    })()}
+                    className="flex-1 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-3 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  />
+                  <select
+                    id="range-start-hour"
+                    defaultValue={timelineStartDate?.length === 12 ? timelineStartDate.slice(6, 8) : '00'}
+                    className="w-16 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-2 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className="text-[#555] self-center">:</span>
+                  <select
+                    id="range-start-min"
+                    defaultValue={timelineStartDate?.length === 12 ? timelineStartDate.slice(8, 10) : '00'}
+                    className="w-16 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-2 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  >
+                    {Array.from({ length: 60 }, (_, i) => (
+                      <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* End Date/Time */}
+              <div>
+                <label className="block text-xs text-[#8a8a8a] mb-2">End</label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    id="range-end-date"
+                    defaultValue={(() => {
+                      if (!timelineEndDate || timelineEndDate.length !== 12) {
+                        return new Date().toISOString().split('T')[0];
+                      }
+                      const year = 2000 + parseInt(timelineEndDate.slice(0, 2));
+                      return `${year}-${timelineEndDate.slice(2, 4)}-${timelineEndDate.slice(4, 6)}`;
+                    })()}
+                    className="flex-1 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-3 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  />
+                  <select
+                    id="range-end-hour"
+                    defaultValue={timelineEndDate?.length === 12 ? timelineEndDate.slice(6, 8) : '23'}
+                    className="w-16 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-2 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className="text-[#555] self-center">:</span>
+                  <select
+                    id="range-end-min"
+                    defaultValue={timelineEndDate?.length === 12 ? timelineEndDate.slice(8, 10) : '59'}
+                    className="w-16 bg-[#1a1a1a] text-[#f5f5f5] text-sm px-2 py-2 rounded-lg border border-[#333] focus:border-[#86efac]/50 focus:outline-none"
+                  >
+                    {Array.from({ length: 60 }, (_, i) => (
+                      <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Validation error */}
+              <div id="range-error" className="text-xs text-[#ef4444] hidden">
+                Start date/time must be before end date/time
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowDateRangePicker(false)}
+                className="px-4 py-2 text-sm text-[#8a8a8a] hover:text-[#f5f5f5] rounded-lg hover:bg-[#1a1a1a] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const startDate = (document.getElementById('range-start-date') as HTMLInputElement)?.value;
+                  const startHour = (document.getElementById('range-start-hour') as HTMLSelectElement)?.value || '00';
+                  const startMin = (document.getElementById('range-start-min') as HTMLSelectElement)?.value || '00';
+                  const endDate = (document.getElementById('range-end-date') as HTMLInputElement)?.value;
+                  const endHour = (document.getElementById('range-end-hour') as HTMLSelectElement)?.value || '23';
+                  const endMin = (document.getElementById('range-end-min') as HTMLSelectElement)?.value || '59';
+                  const errorEl = document.getElementById('range-error');
+
+                  if (startDate && endDate) {
+                    // Validate: start must be before end
+                    const startDt = new Date(`${startDate}T${startHour}:${startMin}:00`);
+                    const endDt = new Date(`${endDate}T${endHour}:${endMin}:00`);
+
+                    if (startDt >= endDt) {
+                      if (errorEl) errorEl.classList.remove('hidden');
+                      return;
+                    }
+                    if (errorEl) errorEl.classList.add('hidden');
+
+                    const formatTs = (date: string, hour: string, min: string) => {
+                      const [year, month, day] = date.split('-');
+                      return `${year.slice(-2)}${month}${day}${hour}${min}00`;
+                    };
+                    setTimelineStartDate(formatTs(startDate, startHour, startMin));
+                    setTimelineEndDate(formatTs(endDate, endHour, endMin));
+                    setShowDateRangePicker(false);
+                  }
+                }}
+                className="px-4 py-2 text-sm bg-[#86efac] text-black font-medium rounded-lg hover:bg-[#6ee7a0] transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showDeleteConfirm}
@@ -1667,5 +1919,18 @@ export default function Home() {
         isLoading={isBulkOperationLoading}
       />
     </div>
+  );
+}
+
+// Wrapper component with Suspense for useSearchParams
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#86efac]/30 border-t-[#86efac] rounded-full animate-spin" />
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
