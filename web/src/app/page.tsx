@@ -1630,34 +1630,6 @@ function HomeContent() {
               </svg>
               View Text
             </button>
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                // Use the screenshot's image path as a search proxy
-                // Set up image search mode and search by image path identifier
-                setSelectedImage(null);
-                setActiveView('search');
-                setSearchMode('image');
-                // Create a query that would trigger similar image search
-                // In absence of a dedicated API, we use the timestamp as context
-                const ts = selectedImage.timestamp;
-                if (ts && ts.length === 12) {
-                  const year = 2000 + parseInt(ts.slice(0, 2));
-                  const month = parseInt(ts.slice(2, 4));
-                  const day = parseInt(ts.slice(4, 6));
-                  const hour = parseInt(ts.slice(6, 8));
-                  const date = new Date(year, month - 1, day, hour);
-                  const searchTerm = date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
-                  setQuery(searchTerm);
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#06b6d4]/10 hover:bg-[#06b6d4]/20 text-[#06b6d4] rounded text-xs border border-[#06b6d4]/30 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
-              Find Similar
-            </button>
           </div>
         </div>
       )}
