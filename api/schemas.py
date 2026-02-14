@@ -146,6 +146,37 @@ class CompressionStartResponse(BaseModel):
     compressible_count: int
 
 
+class ForceRecompressPreviewRequest(BaseModel):
+    """Request to preview force recompression"""
+
+    older_than_days: int = Field(ge=30, le=365)
+
+
+class ForceRecompressPreviewResponse(BaseModel):
+    """Preview of force recompression impact"""
+
+    total_count: int
+    already_compressed_count: int
+    not_compressed_count: int
+    warning: str
+
+
+class ForceRecompressRequest(BaseModel):
+    """Request to start force recompression"""
+
+    older_than_days: int = Field(ge=30, le=365)
+    quality: int | None = Field(None, ge=50, le=90)
+    confirm: bool = False
+
+
+class ForceRecompressResponse(BaseModel):
+    """Response after starting force recompression"""
+
+    success: bool
+    message: str
+    affected_count: int
+
+
 class SyncStartRequest(BaseModel):
     """Request to start sync"""
 

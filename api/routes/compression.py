@@ -10,6 +10,10 @@ from api.schemas import (
     CompressionStartResponse,
     CompressionStats,
     CompressionStatus,
+    ForceRecompressPreviewRequest,
+    ForceRecompressPreviewResponse,
+    ForceRecompressRequest,
+    ForceRecompressResponse,
 )
 from core.compression import CompressionProgress, compression_service
 from core.config import config
@@ -118,4 +122,73 @@ async def get_compression_stats():
         compressible_count=compressible,
         original_size_bytes=stats["original_size_bytes"],
         estimated_savings_bytes=estimated_savings,
+    )
+
+
+@router.post("/force-recompress/preview", response_model=ForceRecompressPreviewResponse)
+async def preview_force_recompress(request: ForceRecompressPreviewRequest):
+    """
+    Preview force recompression impact.
+
+    Shows how many screenshots would be affected by force recompression,
+    including how many are already compressed (which will lose quality).
+    """
+    counts = db.get_force_recompressible_count(request.older_than_days)
+
+    warning = ""
+    if counts["already_compressed"] > 0:
+        warning = (
+            f"{counts['already_compressed']} screenshots are already compressed. "
+            "Re-compressing them will further reduce quality and cannot be undone."
+        )
+
+    return ForceRecompressPreviewResponse(
+        total_count=counts["total"],
+        already_compressed_count=counts["already_compressed"],
+        not_compressed_count=counts["not_compressed"],
+        warning=warning,
+    )
+
+
+@router.post("/force-recompress", response_model=ForceRecompressResponse)
+async def start_force_recompress(request: ForceRecompressRequest):
+    """
+    Start force recompression of all screenshots older than specified days.
+
+    Unlike normal compression, this will re-compress already-compressed screenshots.
+    This is destructive and cannot be undone.
+
+    Requires confirm=true to proceed.
+    """
+    if not request.confirm:
+        return ForceRecompressResponse(
+            success=False,
+            message="Must set confirm=true to proceed with force recompression",
+            affected_count=0,
+        )
+
+    if compression_service.is_running:
+        return ForceRecompressResponse(
+            success=False,
+            message="Compression is already running",
+            affected_count=0,
+        )
+
+    counts = db.get_force_recompressible_count(request.older_than_days)
+    if counts["total"] == 0:
+        return ForceRecompressResponse(
+            success=True,
+            message=f"No screenshots older than {request.older_than_days} days found",
+            affected_count=0,
+        )
+
+    compression_service.start_force_recompress(
+        older_than_days=request.older_than_days,
+        quality=request.quality,
+    )
+
+    return ForceRecompressResponse(
+        success=True,
+        message=f"Force recompression started for {counts['total']} screenshots",
+        affected_count=counts["total"],
     )
