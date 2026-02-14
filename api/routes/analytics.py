@@ -535,7 +535,7 @@ async def get_gap_analytics(
 
             prev_ts = curr_ts
 
-        # Separate incognito and regular gaps, then merge to ensure both types appear
+        # Separate incognito and regular gaps, sorted by duration (longest first)
         incognito_gaps = sorted(
             [g for g in gaps if g["type"] == "incognito"], key=lambda x: x["duration_seconds"], reverse=True
         )
@@ -543,25 +543,19 @@ async def get_gap_analytics(
             [g for g in gaps if g["type"] == "gap"], key=lambda x: x["duration_seconds"], reverse=True
         )
 
-        # Take up to half the limit from each type, then fill remaining
-        half_limit = limit // 2
-        selected_incognito = incognito_gaps[:half_limit]
-        selected_regular = regular_gaps[:half_limit]
+        # Interleave both types so both are always visible at the top
+        # Pattern: regular, incognito, regular, incognito, ...
+        interleaved: list[dict] = []
+        i_reg, i_inc = 0, 0
+        while len(interleaved) < limit and (i_reg < len(regular_gaps) or i_inc < len(incognito_gaps)):
+            if i_reg < len(regular_gaps):
+                interleaved.append(regular_gaps[i_reg])
+                i_reg += 1
+            if len(interleaved) < limit and i_inc < len(incognito_gaps):
+                interleaved.append(incognito_gaps[i_inc])
+                i_inc += 1
 
-        # Fill remaining slots from whichever has more
-        remaining = limit - len(selected_incognito) - len(selected_regular)
-        if remaining > 0:
-            remaining_incognito = incognito_gaps[half_limit : half_limit + remaining]
-            remaining_regular = regular_gaps[half_limit : half_limit + remaining]
-            # Add from whichever has longer gaps
-            combined_remaining = sorted(
-                remaining_incognito + remaining_regular, key=lambda x: x["duration_seconds"], reverse=True
-            )
-            selected_incognito.extend([g for g in combined_remaining[:remaining] if g["type"] == "incognito"])
-            selected_regular.extend([g for g in combined_remaining[:remaining] if g["type"] == "gap"])
-
-        # Merge and sort by duration
-        gaps = sorted(selected_incognito + selected_regular, key=lambda x: x["duration_seconds"], reverse=True)
+        gaps = interleaved
 
         # Calculate statistics
         total_gap_time = sum(g["duration_seconds"] for g in gaps)
