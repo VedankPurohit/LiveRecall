@@ -106,6 +106,13 @@ export interface CompressionStats {
   original_size_bytes: number;
 }
 
+export interface ForceRecompressPreview {
+  total_count: number;
+  already_compressed_count: number;
+  not_compressed_count: number;
+  warning: string;
+}
+
 export interface SyncStatus {
   is_syncing: boolean;
   total: number;

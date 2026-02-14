@@ -130,18 +130,22 @@ class CompressionService:
             f"✅ Compression complete: {self._progress.processed} processed, {self._progress.bytes_saved // 1024}KB saved"
         )
 
-    def _compress_screenshot(self, screenshot: dict, quality: int) -> int:
+    def _compress_screenshot(self, screenshot: dict, quality: int, force: bool = False) -> int:
         """
-        Compress a single screenshot.
-        Returns bytes saved.
+        Compress a single screenshot. Returns bytes saved.
+
+        Args:
+            screenshot: Screenshot dict from database
+            quality: JPEG quality (1-100)
+            force: If True, compress even if already compressed (for force recompression)
         """
         image_path = Path(screenshot["image_path"])
 
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        # Double-check not already compressed (safety)
-        if screenshot.get("is_compressed"):
+        # Skip already compressed unless force mode
+        if screenshot.get("is_compressed") and not force:
             return 0
 
         # Get original size
@@ -195,6 +199,62 @@ class CompressionService:
 
         self._progress.is_running = False
         return self._progress
+
+    def start_force_recompress(
+        self,
+        older_than_days: int,
+        quality: int | None = None,
+        on_progress: Callable[[CompressionProgress], None] | None = None,
+    ):
+        """Start force recompression in background thread"""
+        if self._running:
+            return False
+
+        if quality is None:
+            quality = config.compression.quality
+
+        self._running = True
+        self._cancel_requested = False
+        self._on_progress = on_progress
+
+        def run():
+            try:
+                total = db.get_force_recompressible_count(older_than_days)["total"]
+                self._progress = CompressionProgress(total=total, processed=0, errors=0, bytes_saved=0, is_running=True)
+
+                batch_size = 50
+                processed_ids: set[int] = set()
+
+                while self._running and not self._cancel_requested:
+                    screenshots = db.get_force_recompressible_screenshots(older_than_days, limit=batch_size)
+                    # Filter out already-processed in this run
+                    screenshots = [s for s in screenshots if s["id"] not in processed_ids]
+
+                    if not screenshots:
+                        break
+
+                    for screenshot in screenshots:
+                        if self._cancel_requested:
+                            break
+                        processed_ids.add(screenshot["id"])
+                        try:
+                            saved = self._compress_screenshot(screenshot, quality, force=True)
+                            self._progress.processed += 1
+                            self._progress.bytes_saved += saved
+                        except Exception as e:
+                            print(f"Error compressing {screenshot['image_path']}: {e}")
+                            self._progress.errors += 1
+
+                        if self._on_progress:
+                            self._on_progress(self._progress)
+            finally:
+                self._progress.is_running = False
+                self._cancel_requested = False
+                self._running = False
+
+        self._thread = threading.Thread(target=run, daemon=True)
+        self._thread.start()
+        return True
 
 
 # Global compression service instance

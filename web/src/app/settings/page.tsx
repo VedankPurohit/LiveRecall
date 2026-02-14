@@ -13,8 +13,10 @@ import {
   startCompression,
   getCompressionStatus,
   getCompressionStats,
+  previewForceRecompress,
+  startForceRecompress,
 } from '@/lib/api';
-import type { AppConfig, SystemStatus, SyncStatus, CompressionStatus, CompressionStats, VisibilityFilter } from '@/types';
+import type { AppConfig, SystemStatus, SyncStatus, CompressionStatus, CompressionStats, VisibilityFilter, ForceRecompressPreview } from '@/types';
 
 const STORAGE_KEYS = {
   VISIBILITY_FILTER: 'liverecall_visibility_filter',
@@ -49,6 +51,10 @@ export default function SettingsPage() {
   const [compressionStatus, setCompressionStatus] = useState<CompressionStatus | null>(null);
   const [compressionStats, setCompressionStats] = useState<CompressionStats | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('visible_only');
+  const [showForceRecompress, setShowForceRecompress] = useState(false);
+  const [forceRecompressAge, setForceRecompressAge] = useState(90);
+  const [forceRecompressPreview, setForceRecompressPreview] = useState<ForceRecompressPreview | null>(null);
+  const [forceRecompressLoading, setForceRecompressLoading] = useState(false);
 
   // Load visibility filter from localStorage
   useEffect(() => {
@@ -122,6 +128,42 @@ export default function SettingsPage() {
       setStatus(newStatus);
     } catch (err) {
       console.error('Failed to toggle recording:', err);
+    }
+  };
+
+  const handleOpenForceRecompress = async () => {
+    setShowForceRecompress(true);
+    setForceRecompressLoading(true);
+    try {
+      const preview = await previewForceRecompress(forceRecompressAge);
+      setForceRecompressPreview(preview);
+    } catch (err) {
+      console.error('Failed to preview:', err);
+    } finally {
+      setForceRecompressLoading(false);
+    }
+  };
+
+  const handleForceRecompressAgeChange = async (days: number) => {
+    setForceRecompressAge(days);
+    setForceRecompressLoading(true);
+    try {
+      const preview = await previewForceRecompress(days);
+      setForceRecompressPreview(preview);
+    } catch (err) {
+      console.error('Failed to preview:', err);
+    } finally {
+      setForceRecompressLoading(false);
+    }
+  };
+
+  const handleForceRecompress = async () => {
+    try {
+      await startForceRecompress(forceRecompressAge);
+      setShowForceRecompress(false);
+      setForceRecompressPreview(null);
+    } catch (err) {
+      console.error('Failed to start force recompression:', err);
     }
   };
 
@@ -351,6 +393,15 @@ export default function SettingsPage() {
                 {compressionStatus?.is_compressing ? 'Running...' : 'Compress'}
               </button>
             </Row>
+            <Row label="Force recompress" value="Re-compress all images">
+              <button
+                onClick={handleOpenForceRecompress}
+                disabled={compressionStatus?.is_compressing}
+                className="px-2.5 py-1 rounded text-xs text-[#ef4444] hover:bg-[#ef4444]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Force...
+              </button>
+            </Row>
           </Section>
 
           {/* Stats */}
@@ -382,6 +433,72 @@ export default function SettingsPage() {
           <span>{status.database.total_screenshots} snapshots</span>
         </div>
       </footer>
+
+      {/* Force Recompress Modal */}
+      {showForceRecompress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-[#111] border border-[#1e1e1e] rounded-lg w-80 p-5">
+            <h3 className="text-sm font-medium text-[#f5f5f5] mb-4">Force Recompress</h3>
+
+            <div className="mb-4">
+              <label className="text-xs text-[#555] mb-1.5 block">Older than</label>
+              <select
+                value={forceRecompressAge}
+                onChange={(e) => handleForceRecompressAgeChange(Number(e.target.value))}
+                className="w-full bg-[#0f0f0f] text-[#f5f5f5] px-2.5 py-1.5 rounded border border-[#1e1e1e] text-xs focus:border-[#86efac]/50 focus:outline-none"
+              >
+                <option value={30}>1 month</option>
+                <option value={60}>2 months</option>
+                <option value={90}>3 months</option>
+                <option value={180}>6 months</option>
+                <option value={365}>1 year</option>
+              </select>
+            </div>
+
+            {forceRecompressLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-4 h-4 border border-[#333] border-t-[#86efac] rounded-full animate-spin" />
+              </div>
+            ) : forceRecompressPreview && (
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#555]">Total affected</span>
+                  <span className="text-[#f5f5f5]">{forceRecompressPreview.total_count.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#555]">Not yet compressed</span>
+                  <span className="text-[#8a8a8a]">{forceRecompressPreview.not_compressed_count.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#555]">Already compressed</span>
+                  <span className="text-[#ef4444]">{forceRecompressPreview.already_compressed_count.toLocaleString()}</span>
+                </div>
+                {forceRecompressPreview.warning && (
+                  <div className="mt-2 p-2 rounded bg-[#ef4444]/10 border border-[#ef4444]/20">
+                    <p className="text-[10px] text-[#ef4444]">{forceRecompressPreview.warning}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setShowForceRecompress(false); setForceRecompressPreview(null); }}
+                className="px-3 py-1.5 rounded text-xs text-[#8a8a8a] hover:bg-[#1e1e1e] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceRecompress}
+                disabled={forceRecompressLoading || !forceRecompressPreview?.total_count}
+                className="px-3 py-1.5 rounded text-xs text-[#ef4444] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Recompress
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

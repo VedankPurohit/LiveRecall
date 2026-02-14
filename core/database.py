@@ -708,6 +708,45 @@ class Database:
             )
             return cur.fetchone()[0]
 
+    def get_force_recompressible_screenshots(self, older_than_days: int, limit: int | None = None) -> list[dict]:
+        """Get all screenshots older than specified days (including already compressed)"""
+        with self.cursor() as cur:
+            query = """
+                SELECT * FROM screenshots
+                WHERE created_at < datetime('now', ?)
+                ORDER BY created_at ASC
+            """
+            days_ago = f"-{older_than_days} days"
+
+            if limit:
+                query += " LIMIT ?"
+                cur.execute(query, (days_ago, limit))
+            else:
+                cur.execute(query, (days_ago,))
+
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_force_recompressible_count(self, older_than_days: int) -> dict:
+        """Get count of screenshots eligible for force recompression"""
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN is_compressed = 1 THEN 1 ELSE 0 END) as already_compressed,
+                    SUM(CASE WHEN is_compressed = 0 THEN 1 ELSE 0 END) as not_compressed
+                FROM screenshots
+                WHERE created_at < datetime('now', ?)
+            """,
+                (f"-{older_than_days} days",),
+            )
+            row = cur.fetchone()
+            return {
+                "total": row[0] or 0,
+                "already_compressed": row[1] or 0,
+                "not_compressed": row[2] or 0,
+            }
+
     def mark_compressed(
         self,
         screenshot_id: int,

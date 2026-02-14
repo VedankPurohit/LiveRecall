@@ -52,8 +52,8 @@ class CompressionSettings:
     """Auto-compression settings for old screenshots"""
 
     enabled: bool = False  # Off by default
-    after_days: int = 60  # Compress screenshots older than 2 months
-    quality: int = 85  # JPEG quality for compressed images
+    after_days: int = 90  # Compress screenshots older than 3 months
+    quality: int = 75  # JPEG quality for compressed images
 
 
 # =============================================================================

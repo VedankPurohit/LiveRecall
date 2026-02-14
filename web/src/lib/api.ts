@@ -5,6 +5,7 @@ import type {
   SearchResult,
   CompressionStatus,
   CompressionStats,
+  ForceRecompressPreview,
   SyncStatus,
   ApiResponse,
   DateRange,
@@ -165,6 +166,20 @@ export async function getCompressionStatus(): Promise<CompressionStatus> {
 
 export async function getCompressionStats(): Promise<CompressionStats> {
   return fetchApi('/compression/stats');
+}
+
+export async function previewForceRecompress(olderThanDays: number): Promise<ForceRecompressPreview> {
+  return fetchApi('/compression/force-recompress/preview', {
+    method: 'POST',
+    body: JSON.stringify({ older_than_days: olderThanDays }),
+  });
+}
+
+export async function startForceRecompress(olderThanDays: number, quality?: number): Promise<ApiResponse<void>> {
+  return fetchApi('/compression/force-recompress', {
+    method: 'POST',
+    body: JSON.stringify({ older_than_days: olderThanDays, quality, confirm: true }),
+  });
 }
 
 // Screenshots
