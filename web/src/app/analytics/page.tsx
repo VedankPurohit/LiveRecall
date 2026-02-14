@@ -257,18 +257,27 @@ function WeekActivityHeatmap({
     return 'bg-[#86efac]/90';
   };
 
+  // Parse "YYYY-MM-DD" as local date (not UTC) to avoid timezone shift
+  const parseLocalDate = (dateStr: string): Date => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
   // Get array of dates for the week (Mon-Sun)
   const getWeekDates = (): { date: string; label: string; dayLabel: string }[] => {
     if (!weekData) return [];
     const dates: { date: string; label: string; dayLabel: string }[] = [];
     const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-    const start = new Date(weekData.week_start);
+    const start = parseLocalDate(weekData.week_start);
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
       dates.push({
-        date: d.toISOString().split('T')[0],
+        date: `${yyyy}-${mm}-${dd}`,
         label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         dayLabel: dayLabels[i],
       });
@@ -280,8 +289,8 @@ function WeekActivityHeatmap({
 
   const formatDateRange = () => {
     if (!weekData) return '';
-    const start = new Date(weekData.week_start);
-    const end = new Date(weekData.week_end);
+    const start = parseLocalDate(weekData.week_start);
+    const end = parseLocalDate(weekData.week_end);
     return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   };
 

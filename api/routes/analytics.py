@@ -55,7 +55,7 @@ def format_timestamp(dt: datetime) -> str:
 
 
 @router.get("/overview")
-async def get_overview():
+def get_overview():
     """
     Get overview statistics for the analytics dashboard.
 
@@ -119,7 +119,7 @@ async def get_overview():
 
 
 @router.get("/storage")
-async def get_storage_analytics(
+def get_storage_analytics(
     days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
 ):
     """
@@ -284,7 +284,7 @@ async def get_storage_analytics(
 
 
 @router.get("/activity")
-async def get_activity_analytics(
+def get_activity_analytics(
     weeks: int = Query(default=12, ge=1, le=52, description="Number of weeks for heatmap"),
 ):
     """
@@ -367,7 +367,7 @@ async def get_activity_analytics(
 
 
 @router.get("/activity-week")
-async def get_activity_week(
+def get_activity_week(
     week_offset: int = Query(
         default=0, ge=-52, le=0, description="Week offset from current week (0=current, -1=last week, etc.)"
     ),
@@ -461,9 +461,10 @@ async def get_activity_week(
 
 
 @router.get("/gaps")
-async def get_gap_analytics(
+def get_gap_analytics(
     min_gap_minutes: int = Query(default=30, ge=5, le=1440, description="Minimum gap duration in minutes"),
     limit: int = Query(default=50, ge=10, le=200, description="Maximum gaps to return"),
+    lookback_days: int = Query(default=90, ge=7, le=365, description="How many days back to analyze"),
 ):
     """
     Get timeline gaps (periods with no visible screenshots).
@@ -474,26 +475,30 @@ async def get_gap_analytics(
     A gap is marked as 'incognito' if there are hidden screenshots
     during the gap period (incognito saves screenshots as hidden).
     """
+    lookback_ts = format_timestamp(datetime.now() - timedelta(days=lookback_days))
+
     with db.cursor() as cur:
-        # Get VISIBLE screenshots only for gap detection
+        # Get VISIBLE screenshots only for gap detection (bounded by lookback)
         cur.execute(
             """
             SELECT timestamp
             FROM screenshots
-            WHERE is_hidden = 0
+            WHERE is_hidden = 0 AND timestamp >= ?
             ORDER BY timestamp ASC
-            """
+            """,
+            (lookback_ts,),
         )
         visible_rows = cur.fetchall()
 
-        # Get HIDDEN screenshots for incognito detection
+        # Get HIDDEN screenshots for incognito detection (bounded by lookback)
         cur.execute(
             """
             SELECT timestamp
             FROM screenshots
-            WHERE is_hidden = 1
+            WHERE is_hidden = 1 AND timestamp >= ?
             ORDER BY timestamp ASC
-            """
+            """,
+            (lookback_ts,),
         )
         hidden_rows = cur.fetchall()
 
@@ -544,6 +549,13 @@ async def get_gap_analytics(
 
             prev_ts = curr_ts
 
+        # Calculate statistics from ALL detected gaps (before truncation)
+        all_durations = [g["duration_seconds"] for g in gaps]
+        total_gap_time = sum(all_durations)
+        longest_gap = max(all_durations) if all_durations else 0
+        avg_gap = total_gap_time / len(all_durations) if all_durations else 0
+        total_gap_count = len(gaps)
+
         # Separate incognito and regular gaps, sorted by duration (longest first)
         incognito_gaps = sorted(
             [g for g in gaps if g["type"] == "incognito"], key=lambda x: x["duration_seconds"], reverse=True
@@ -566,22 +578,17 @@ async def get_gap_analytics(
 
         gaps = interleaved
 
-        # Calculate statistics
-        total_gap_time = sum(g["duration_seconds"] for g in gaps)
-        longest_gap = gaps[0]["duration_seconds"] if gaps else 0
-        avg_gap = total_gap_time / len(gaps) if gaps else 0
-
     return {
         "gaps": gaps,
         "total_gap_time_seconds": total_gap_time,
         "longest_gap_seconds": longest_gap,
         "avg_gap_seconds": int(avg_gap),
-        "gap_count": len(gaps),
+        "gap_count": total_gap_count,
     }
 
 
 @router.get("/quality")
-async def get_quality_analytics():
+def get_quality_analytics():
     """
     Get file quality and size distribution analytics.
     """
@@ -659,7 +666,7 @@ async def get_quality_analytics():
 
 
 @router.get("/trends")
-async def get_trends_analytics(
+def get_trends_analytics(
     days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
 ):
     """
