@@ -3,6 +3,7 @@ Analytics API Routes
 Provides aggregated analytics data for the dashboard
 """
 
+import bisect
 import contextlib
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -34,15 +35,18 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 def parse_timestamp(ts: str) -> datetime:
     """Convert YYMMDDHHMMSS to datetime."""
-    if len(ts) != 12:
+    try:
+        if len(ts) != 12:
+            return datetime.now()
+        year = 2000 + int(ts[0:2])
+        month = int(ts[2:4])
+        day = int(ts[4:6])
+        hour = int(ts[6:8])
+        minute = int(ts[8:10])
+        second = int(ts[10:12])
+        return datetime(year, month, day, hour, minute, second)
+    except (ValueError, TypeError):
         return datetime.now()
-    year = 2000 + int(ts[0:2])
-    month = int(ts[2:4])
-    day = int(ts[4:6])
-    hour = int(ts[6:8])
-    minute = int(ts[8:10])
-    second = int(ts[10:12])
-    return datetime(year, month, day, hour, minute, second)
 
 
 def format_timestamp(dt: datetime) -> str:
@@ -128,7 +132,15 @@ async def get_storage_analytics(
 
         daily_data = []
 
-        # Build a lookup of file sizes by date from the database timestamps
+        # Build a fast filename→size lookup via single scandir pass
+        screenshots_dir = get_screenshots_dir()
+        file_size_map: dict[str, int] = {}
+        if screenshots_dir.exists():
+            with contextlib.suppress(OSError):
+                for entry in screenshots_dir.iterdir():
+                    if entry.is_file() and entry.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                        file_size_map[str(entry)] = entry.stat().st_size
+
         cur.execute(
             """
             SELECT timestamp, image_path
@@ -140,15 +152,15 @@ async def get_storage_analytics(
         )
         rows = cur.fetchall()
 
-        # Group by date
+        # Group by date using pre-built size map (no per-row stat calls)
         date_sizes: dict[str, list[int]] = {}
         for row in rows:
             ts = row[0]
-            path = Path(row[1])
+            image_path = row[1]
             if len(ts) >= 6:
                 date_key = f"20{ts[0:2]}-{ts[2:4]}-{ts[4:6]}"
-                if path.exists():
-                    size = path.stat().st_size
+                size = file_size_map.get(image_path)
+                if size is not None:
                     if date_key not in date_sizes:
                         date_sizes[date_key] = []
                     date_sizes[date_key].append(size)
@@ -494,11 +506,12 @@ async def get_gap_analytics(
                 "gap_count": 0,
             }
 
-        # Build list of hidden timestamps for checking incognito periods
-        hidden_timestamps = []
+        # Build sorted list of hidden timestamps for O(log n) incognito checking
+        hidden_timestamps: list[datetime] = []
         for (ts,) in hidden_rows:
             with contextlib.suppress(Exception):
                 hidden_timestamps.append(parse_timestamp(ts))
+        hidden_timestamps.sort()
 
         min_gap_seconds = min_gap_minutes * 60
         gaps = []
@@ -514,13 +527,9 @@ async def get_gap_analytics(
             gap_seconds = (curr_dt - prev_dt).total_seconds()
 
             if gap_seconds >= min_gap_seconds:
-                # Check if there are hidden screenshots during this gap period
-                # If so, it's an incognito period
-                has_hidden_during_gap = False
-                for hidden_dt in hidden_timestamps:
-                    if prev_dt < hidden_dt < curr_dt:
-                        has_hidden_during_gap = True
-                        break
+                # O(log n) check: find if any hidden timestamp falls in (prev_dt, curr_dt)
+                idx = bisect.bisect_right(hidden_timestamps, prev_dt)
+                has_hidden_during_gap = idx < len(hidden_timestamps) and hidden_timestamps[idx] < curr_dt
 
                 gap_type = "incognito" if has_hidden_during_gap else "gap"
 

@@ -160,10 +160,13 @@ function HomeContent() {
     const start = searchParams.get('start');
     const end = searchParams.get('end');
     if (start && end) {
-      setTimelineStartDate(start);
-      setTimelineEndDate(end);
-      // Switch to search/gallery view to show filtered results
-      setActiveView('search');
+      // Validate: must be 12-digit YYMMDDHHMMSS timestamps and start <= end
+      const isValidTs = (s: string) => /^\d{12}$/.test(s);
+      if (isValidTs(start) && isValidTs(end) && start <= end) {
+        setTimelineStartDate(start);
+        setTimelineEndDate(end);
+        setActiveView('search');
+      }
     }
   }, [searchParams]);
 
