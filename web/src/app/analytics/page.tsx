@@ -851,7 +851,7 @@ export default function AnalyticsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center">
                       <h3 className="text-lg font-medium text-[#f5f5f5]">Timeline Gaps</h3>
-                      <InfoTooltip text="Periods of 30+ minutes without screenshots. Yellow = normal gaps (computer off, etc). Purple = intentional incognito mode periods." />
+                      <InfoTooltip text="Periods of 5+ minutes without screenshots. Yellow = normal gaps (computer off, etc). Purple = intentional incognito mode periods." />
                     </div>
                     {gaps && gaps.gap_count > 0 && (
                       <span className="text-xs text-[#8a8a8a] bg-[#1e1e1e] px-2 py-1 rounded">
