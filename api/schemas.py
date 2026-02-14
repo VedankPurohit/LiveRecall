@@ -741,6 +741,189 @@ class MigrationStatus(BaseModel):
         }
 
 
+# =============================================================================
+# Analytics Types
+# =============================================================================
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    """Overview statistics for the analytics dashboard"""
+
+    total_screenshots: int
+    total_storage_bytes: int
+    compressed_count: int
+    avg_file_size: int
+    screenshots_today: int
+    screenshots_yesterday: int
+    screenshots_this_week: int
+    ocr_processed_count: int
+
+
+class StorageDailyData(BaseModel):
+    date: str
+    screenshots: int
+    bytes_added: int
+    cumulative_bytes: int
+
+
+class StorageCompression(BaseModel):
+    compressed_count: int
+    uncompressed_count: int
+    original_bytes: int
+    current_bytes: int
+    bytes_saved: int
+
+
+class StorageMonthEntry(BaseModel):
+    month: str
+    bytes: int
+    count: int
+
+
+class StorageLargestFile(BaseModel):
+    path: str
+    size: int
+    timestamp: str
+
+
+class AnalyticsStorageResponse(BaseModel):
+    """Storage analytics breakdown"""
+
+    daily_data: list[StorageDailyData]
+    compression: StorageCompression
+    largest_files: list[StorageLargestFile]
+    storage_by_month: list[StorageMonthEntry]
+
+
+class HourlyDistribution(BaseModel):
+    hour: int
+    count: int
+
+
+class DailyDistribution(BaseModel):
+    day: str
+    count: int
+
+
+class WeeklyTrend(BaseModel):
+    week: str
+    count: int
+
+
+class HeatmapItem(BaseModel):
+    date: str
+    day_of_week: int
+    day_label: str
+    hour: int
+    count: int
+
+
+class AnalyticsActivityResponse(BaseModel):
+    """Activity distribution analytics"""
+
+    heatmap_data: list[HeatmapItem]
+    hourly_distribution: list[HourlyDistribution]
+    daily_distribution: list[DailyDistribution]
+    weekly_trend: list[WeeklyTrend]
+    peak_hour: int
+    peak_day: str
+    total_in_period: int
+
+
+class WeekHeatmapItem(BaseModel):
+    date: str
+    day_of_week: int
+    day_label: str
+    hour: int
+    count: int
+    screenshot_ids: list[int]
+
+
+class WeekPeak(BaseModel):
+    day: str
+    hour: int
+    count: int
+
+
+class AnalyticsActivityWeekResponse(BaseModel):
+    """Week-based activity heatmap"""
+
+    week_start: str
+    week_end: str
+    week_offset: int
+    heatmap_data: list[WeekHeatmapItem]
+    total_screenshots: int
+    peak: WeekPeak | None
+
+
+class GapEntry(BaseModel):
+    start_time: str
+    end_time: str
+    duration_seconds: int
+    type: str
+
+
+class AnalyticsGapsResponse(BaseModel):
+    """Timeline gaps analytics"""
+
+    gaps: list[GapEntry]
+    total_gap_time_seconds: int
+    longest_gap_seconds: int
+    avg_gap_seconds: int
+    gap_count: int
+
+
+class SizeDistributionEntry(BaseModel):
+    range: str
+    count: int
+
+
+class QualityCompressionStats(BaseModel):
+    compressed_count: int
+    uncompressed_count: int
+    original_bytes_before_compression: int
+
+
+class AnalyticsQualityResponse(BaseModel):
+    """File quality and size distribution"""
+
+    avg_file_size: int
+    min_file_size: int
+    max_file_size: int
+    median_file_size: int
+    size_distribution: list[SizeDistributionEntry]
+    total_files: int
+    compression_stats: QualityCompressionStats
+
+
+class TrendsDailyData(BaseModel):
+    date: str
+    count: int
+    moving_avg: float
+
+
+class TrendsDayInfo(BaseModel):
+    date: str | None
+    count: int
+
+
+class TrendsSummary(BaseModel):
+    total_screenshots: int
+    synced_count: int
+    ocr_processed_count: int
+    avg_per_day: float
+    days_with_recordings: int
+    best_day: TrendsDayInfo | None
+    worst_day: TrendsDayInfo | None
+
+
+class AnalyticsTrendsResponse(BaseModel):
+    """Screenshot trends over time"""
+
+    daily_data: list[TrendsDailyData]
+    summary: TrendsSummary
+
+
 class EnhancedSetupStatus(BaseModel):
     """Comprehensive setup status including models and migration"""
 

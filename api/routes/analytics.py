@@ -11,6 +11,15 @@ from typing import TypedDict
 
 from fastapi import APIRouter, Query
 
+from api.schemas import (
+    AnalyticsActivityResponse,
+    AnalyticsActivityWeekResponse,
+    AnalyticsGapsResponse,
+    AnalyticsOverviewResponse,
+    AnalyticsQualityResponse,
+    AnalyticsStorageResponse,
+    AnalyticsTrendsResponse,
+)
 from core.config import get_screenshots_dir
 from core.database import db
 
@@ -54,7 +63,7 @@ def format_timestamp(dt: datetime) -> str:
     return dt.strftime("%y%m%d%H%M%S")
 
 
-@router.get("/overview")
+@router.get("/overview", response_model=AnalyticsOverviewResponse)
 def get_overview():
     """
     Get overview statistics for the analytics dashboard.
@@ -118,7 +127,7 @@ def get_overview():
     }
 
 
-@router.get("/storage")
+@router.get("/storage", response_model=AnalyticsStorageResponse)
 def get_storage_analytics(
     days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
 ):
@@ -283,7 +292,7 @@ def get_storage_analytics(
     }
 
 
-@router.get("/activity")
+@router.get("/activity", response_model=AnalyticsActivityResponse)
 def get_activity_analytics(
     weeks: int = Query(default=12, ge=1, le=52, description="Number of weeks for heatmap"),
 ):
@@ -366,7 +375,7 @@ def get_activity_analytics(
     }
 
 
-@router.get("/activity-week")
+@router.get("/activity-week", response_model=AnalyticsActivityWeekResponse)
 def get_activity_week(
     week_offset: int = Query(
         default=0, ge=-52, le=0, description="Week offset from current week (0=current, -1=last week, etc.)"
@@ -460,7 +469,7 @@ def get_activity_week(
     }
 
 
-@router.get("/gaps")
+@router.get("/gaps", response_model=AnalyticsGapsResponse)
 def get_gap_analytics(
     min_gap_minutes: int = Query(default=30, ge=5, le=1440, description="Minimum gap duration in minutes"),
     limit: int = Query(default=50, ge=10, le=200, description="Maximum gaps to return"),
@@ -587,7 +596,7 @@ def get_gap_analytics(
     }
 
 
-@router.get("/quality")
+@router.get("/quality", response_model=AnalyticsQualityResponse)
 def get_quality_analytics():
     """
     Get file quality and size distribution analytics.
@@ -665,7 +674,7 @@ def get_quality_analytics():
     }
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=AnalyticsTrendsResponse)
 def get_trends_analytics(
     days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
 ):
