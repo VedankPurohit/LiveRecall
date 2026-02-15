@@ -38,18 +38,20 @@ export function CompressionSuggestion() {
   }, []);
 
   const dismiss = () => {
+    localStorage.setItem(DISMISSED_KEY, Date.now().toString());
     setExiting(true);
-    setTimeout(() => {
-      setVisible(false);
-      localStorage.setItem(DISMISSED_KEY, Date.now().toString());
-    }, 300);
+    setTimeout(() => setVisible(false), 300);
   };
 
   const handleEnable = async () => {
     setEnabling(true);
     try {
       await updateConfig({ compression_enabled: true });
-      await startCompression();
+      try {
+        await startCompression();
+      } catch {
+        // Config enabled but immediate start failed — will run on next trigger
+      }
       dismiss();
     } catch (err) {
       console.error('Failed to enable compression:', err);
