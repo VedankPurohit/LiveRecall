@@ -62,6 +62,6 @@ def mock_config():
         compression=CompressionSettings(
             enabled=False,
             after_days=60,
-            quality=85,
+            quality=75,
         ),
     )
