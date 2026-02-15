@@ -6,7 +6,6 @@ Provides aggregated analytics data for the dashboard
 import bisect
 import contextlib
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TypedDict
 
 from fastapi import APIRouter, Query
@@ -42,11 +41,11 @@ class DailyDataPoint(TypedDict):
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
-def parse_timestamp(ts: str) -> datetime:
-    """Convert YYMMDDHHMMSS to datetime."""
+def parse_timestamp(ts: str) -> datetime | None:
+    """Convert YYMMDDHHMMSS to datetime. Returns None for invalid input."""
     try:
         if len(ts) != 12:
-            return datetime.now()
+            return None
         year = 2000 + int(ts[0:2])
         month = int(ts[2:4])
         day = int(ts[4:6])
@@ -55,7 +54,7 @@ def parse_timestamp(ts: str) -> datetime:
         second = int(ts[10:12])
         return datetime(year, month, day, hour, minute, second)
     except (ValueError, TypeError):
-        return datetime.now()
+        return None
 
 
 def format_timestamp(dt: datetime) -> str:
@@ -214,43 +213,13 @@ def get_storage_analytics(
         cur.execute("SELECT SUM(original_size_bytes) FROM screenshots WHERE is_compressed = 1")
         original_bytes = cur.fetchone()[0] or 0
 
-        # Get current compressed file sizes
+        # Fetch compressed file paths (stat() done outside cursor)
         cur.execute("SELECT image_path FROM screenshots WHERE is_compressed = 1")
-        compressed_current_bytes = 0
-        for row in cur.fetchall():
-            path = Path(row[0])
-            if path.exists():
-                compressed_current_bytes += path.stat().st_size
+        compressed_paths = [row[0] for row in cur.fetchall()]
 
-        bytes_saved = original_bytes - compressed_current_bytes if original_bytes > 0 else 0
-
-        # Get largest files
-        cur.execute(
-            """
-            SELECT id, image_path, timestamp
-            FROM screenshots
-            ORDER BY timestamp DESC
-            LIMIT 100
-            """
-        )
-
-        largest_files = []
-        for row in cur.fetchall():
-            path = Path(row[1])
-            if path.exists():
-                size = path.stat().st_size
-                largest_files.append(
-                    {
-                        "id": row[0],
-                        "path": row[1],
-                        "timestamp": row[2],
-                        "size_bytes": size,
-                    }
-                )
-
-        # Sort by size and take top 10
-        largest_files.sort(key=lambda x: x["size_bytes"], reverse=True)
-        largest_files = largest_files[:10]
+        # Fetch all screenshot metadata for largest files (use file_size_map built earlier)
+        cur.execute("SELECT id, image_path, timestamp FROM screenshots")
+        all_screenshot_rows = [(row[0], row[1], row[2]) for row in cur.fetchall()]
 
         # Storage by month
         cur.execute(
@@ -277,6 +246,23 @@ def get_storage_analytics(
                         "count": row[1],
                     }
                 )
+
+    # Compute compressed file sizes outside DB lock (filesystem I/O)
+    compressed_current_bytes = 0
+    for p in compressed_paths:
+        size = file_size_map.get(p)
+        if size is not None:
+            compressed_current_bytes += size
+    bytes_saved = original_bytes - compressed_current_bytes if original_bytes > 0 else 0
+
+    # Find largest files using pre-built file_size_map (no per-file stat)
+    largest_files = []
+    for sid, spath, sts in all_screenshot_rows:
+        size = file_size_map.get(spath)
+        if size is not None:
+            largest_files.append({"id": sid, "path": spath, "timestamp": sts, "size_bytes": size})
+    largest_files.sort(key=lambda x: x["size_bytes"], reverse=True)
+    largest_files = largest_files[:10]
 
     return {
         "daily_data": daily_data,
@@ -325,6 +311,8 @@ def get_activity_analytics(
         for row in cur.fetchall():
             ts = row[0]
             dt = parse_timestamp(ts)
+            if dt is None:
+                continue
             day_of_week = dt.weekday()  # 0=Monday, 6=Sunday
             hour = dt.hour
 
@@ -417,6 +405,8 @@ def get_activity_week(
             ts = row[0]
             screenshot_id = row[1]
             dt = parse_timestamp(ts)
+            if dt is None:
+                continue
             date_key = dt.strftime("%Y-%m-%d")
             hour = dt.hour
 
@@ -523,8 +513,9 @@ def get_gap_analytics(
         # Build sorted list of hidden timestamps for O(log n) incognito checking
         hidden_timestamps: list[datetime] = []
         for (ts,) in hidden_rows:
-            with contextlib.suppress(Exception):
-                hidden_timestamps.append(parse_timestamp(ts))
+            dt = parse_timestamp(ts)
+            if dt is not None:
+                hidden_timestamps.append(dt)
         hidden_timestamps.sort()
 
         min_gap_seconds = min_gap_minutes * 60
@@ -537,6 +528,10 @@ def get_gap_analytics(
 
             prev_dt = parse_timestamp(prev_ts)
             curr_dt = parse_timestamp(curr_ts)
+
+            if prev_dt is None or curr_dt is None:
+                prev_ts = curr_ts
+                continue
 
             gap_seconds = (curr_dt - prev_dt).total_seconds()
 
