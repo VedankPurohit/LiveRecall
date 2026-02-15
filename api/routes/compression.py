@@ -182,10 +182,17 @@ async def start_force_recompress(request: ForceRecompressRequest):
             affected_count=0,
         )
 
-    compression_service.start_force_recompress(
+    started = compression_service.start_force_recompress(
         older_than_days=request.older_than_days,
         quality=request.quality,
     )
+
+    if not started:
+        return ForceRecompressResponse(
+            success=False,
+            message="Failed to start - compression may already be running",
+            affected_count=0,
+        )
 
     return ForceRecompressResponse(
         success=True,

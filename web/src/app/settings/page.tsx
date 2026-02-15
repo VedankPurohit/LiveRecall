@@ -498,7 +498,7 @@ export default function SettingsPage() {
 
             <div className="flex gap-2 justify-end mt-4">
               <button
-                onClick={() => { setShowForceRecompress(false); setForceRecompressPreview(null); }}
+                onClick={() => { setShowForceRecompress(false); setForceRecompressPreview(null); setForceRecompressConfirmed(false); }}
                 className="px-3 py-1.5 rounded text-xs text-[#8a8a8a] hover:bg-[#1e1e1e] transition-colors"
               >
                 Cancel
