@@ -100,6 +100,7 @@ async def get_config():
             threshold=config.capture.threshold,
             save_threshold=config.capture.save_threshold,
             quality=config.capture.quality,
+            max_time_without_save=config.capture.max_time_without_save,
         ),
         compression=CompressionConfig(
             enabled=config.compression.enabled,
@@ -146,6 +147,10 @@ async def update_config(request: ConfigUpdateRequest):
     if request.capture_quality is not None:
         config.capture.quality = request.capture_quality
         updated.append(f"capture_quality={request.capture_quality}")
+
+    if request.capture_max_time_without_save is not None:
+        config.capture.max_time_without_save = request.capture_max_time_without_save
+        updated.append(f"capture_max_time_without_save={request.capture_max_time_without_save}")
 
     if request.compression_enabled is not None:
         config.compression.enabled = request.compression_enabled

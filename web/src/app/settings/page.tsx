@@ -278,6 +278,15 @@ export default function SettingsPage() {
                 onChange={(val) => handleUpdate({ capture_quality: val })}
               />
             </Row>
+            <Row label="Chaotic Save Timeout" value={config.capture.max_time_without_save === 0 ? "Off" : `${config.capture.max_time_without_save}s`}>
+              <Slider
+                min={0}
+                max={120}
+                step={5}
+                value={config.capture.max_time_without_save}
+                onChange={(val) => handleUpdate({ capture_max_time_without_save: val })}
+              />
+            </Row>
           </Section>
 
           {/* Sync */}

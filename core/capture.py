@@ -26,6 +26,7 @@ class CaptureService:
         self._thread: threading.Thread | None = None
         self._previous_screenshot: np.ndarray | None = None
         self._on_capture: Callable[[str], None] | None = None
+        self._last_save_time: float = 0.0  # Track last save for force-save logic
 
     @property
     def is_running(self) -> bool:
@@ -107,6 +108,7 @@ class CaptureService:
         """Main capture loop"""
         # Initialize with first screenshot
         self._previous_screenshot = self._image_to_array(self._grab_screen())
+        self._last_save_time = time.time()  # Initialize timer
 
         while self._running:
             try:
@@ -129,6 +131,7 @@ class CaptureService:
 
                     # Wait for screen to stabilize
                     stable_checks = 3
+                    is_stable = True
                     while stable_checks > 0 and self._running:
                         stable_checks -= 1
                         time.sleep(config.capture.interval * 0.3)
@@ -138,12 +141,26 @@ class CaptureService:
                         stability = self._calculate_ssim(self._previous_screenshot, new_array)
 
                         if stability <= config.capture.save_threshold:
-                            # Still changing, reset
+                            # Still changing
+                            is_stable = False
                             break
-                    else:
-                        # Screen is stable, save screenshot
+
+                    # Check if we should force save due to time threshold
+                    time_since_last = time.time() - self._last_save_time
+                    should_force_save = (
+                        not is_stable
+                        and config.capture.max_time_without_save > 0
+                        and time_since_last >= config.capture.max_time_without_save
+                    )
+
+                    if is_stable or should_force_save:
+                        if should_force_save:
+                            print(f"Force saving after {time_since_last:.1f}s of chaotic changes")
+
+                        # Save screenshot
                         filepath = self._save_screenshot(current_image)
                         print(f"Screenshot saved: {filepath}")
+                        self._last_save_time = time.time()  # Reset timer
 
                         if self._on_capture:
                             self._on_capture(filepath)
@@ -159,6 +176,7 @@ class CaptureService:
         image = self._grab_screen()
         filepath = self._save_screenshot(image)
         self._previous_screenshot = self._image_to_array(image)
+        self._last_save_time = time.time()  # Reset timer
         return filepath
 
 
