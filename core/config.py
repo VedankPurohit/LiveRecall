@@ -128,6 +128,7 @@ class CaptureSettings:
     threshold: float = 0.9  # SSIM threshold for change detection
     save_threshold: float = 0.6  # SSIM threshold for saving
     quality: int = 95  # JPEG quality (1-100)
+    max_time_without_save: float = 40.0  # Force save after this many seconds of chaotic changes
 
     # Preset modes
     MODES = {
@@ -240,6 +241,7 @@ class Config:
                 "threshold": self.capture.threshold,
                 "save_threshold": self.capture.save_threshold,
                 "quality": self.capture.quality,
+                "max_time_without_save": self.capture.max_time_without_save,
             },
             "compression": {
                 "enabled": self.compression.enabled,
@@ -291,6 +293,9 @@ class Config:
                 self.capture.threshold = cap.get("threshold", self.capture.threshold)
                 self.capture.save_threshold = cap.get("save_threshold", self.capture.save_threshold)
                 self.capture.quality = cap.get("quality", self.capture.quality)
+                self.capture.max_time_without_save = cap.get(
+                    "max_time_without_save", self.capture.max_time_without_save
+                )
 
             # Load compression settings
             if "compression" in data:
