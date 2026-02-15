@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [forceRecompressAge, setForceRecompressAge] = useState(90);
   const [forceRecompressPreview, setForceRecompressPreview] = useState<ForceRecompressPreview | null>(null);
   const [forceRecompressLoading, setForceRecompressLoading] = useState(false);
+  const [forceRecompressConfirmed, setForceRecompressConfirmed] = useState(false);
 
   // Load visibility filter from localStorage
   useEffect(() => {
@@ -133,6 +134,7 @@ export default function SettingsPage() {
 
   const handleOpenForceRecompress = async () => {
     setShowForceRecompress(true);
+    setForceRecompressConfirmed(false);
     setForceRecompressLoading(true);
     try {
       const preview = await previewForceRecompress(forceRecompressAge);
@@ -474,14 +476,27 @@ export default function SettingsPage() {
                   <span className="text-[#ef4444]">{forceRecompressPreview.already_compressed_count.toLocaleString()}</span>
                 </div>
                 {forceRecompressPreview.warning && (
-                  <div className="mt-2 p-2 rounded bg-[#ef4444]/10 border border-[#ef4444]/20">
-                    <p className="text-[10px] text-[#ef4444]">{forceRecompressPreview.warning}</p>
+                  <div className="mt-2 p-2.5 rounded bg-[#ef4444]/10 border border-[#ef4444]/20">
+                    <p className="text-[11px] text-[#ef4444] leading-relaxed">{forceRecompressPreview.warning}</p>
                   </div>
                 )}
+
+                {/* Confirmation checkbox */}
+                <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={forceRecompressConfirmed}
+                    onChange={(e) => setForceRecompressConfirmed(e.target.checked)}
+                    className="mt-0.5 accent-[#ef4444]"
+                  />
+                  <span className="text-[11px] text-[#666] leading-relaxed">
+                    I understand this is irreversible and may reduce image quality
+                  </span>
+                </label>
               </div>
             )}
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end mt-4">
               <button
                 onClick={() => { setShowForceRecompress(false); setForceRecompressPreview(null); }}
                 className="px-3 py-1.5 rounded text-xs text-[#8a8a8a] hover:bg-[#1e1e1e] transition-colors"
@@ -490,7 +505,7 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={handleForceRecompress}
-                disabled={forceRecompressLoading || !forceRecompressPreview?.total_count}
+                disabled={forceRecompressLoading || !forceRecompressPreview?.total_count || !forceRecompressConfirmed}
                 className="px-3 py-1.5 rounded text-xs text-[#ef4444] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Recompress

@@ -28,6 +28,7 @@ import { useSelection } from '@/hooks/useSelection';
 import { SelectionToolbar } from '@/components/SelectionToolbar';
 import { ConfirmationDialog } from '@/components/ConfirmationDialog';
 import { IncognitoIndicator } from '@/components/IncognitoIndicator';
+import { CompressionSuggestion } from '@/components/CompressionSuggestion';
 
 // localStorage keys
 const STORAGE_KEYS = {
@@ -1893,6 +1894,9 @@ function HomeContent() {
         confirmVariant="warning"
         isLoading={isBulkOperationLoading}
       />
+
+      {/* Compression suggestion banner */}
+      <CompressionSuggestion />
     </div>
   );
 }
