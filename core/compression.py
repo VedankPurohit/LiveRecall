@@ -223,12 +223,12 @@ class CompressionService:
                 self._progress = CompressionProgress(total=total, processed=0, errors=0, bytes_saved=0, is_running=True)
 
                 batch_size = 50
-                processed_ids: set[int] = set()
+                offset = 0
 
                 while self._running and not self._cancel_requested:
-                    screenshots = db.get_force_recompressible_screenshots(older_than_days, limit=batch_size)
-                    # Filter out already-processed in this run
-                    screenshots = [s for s in screenshots if s["id"] not in processed_ids]
+                    screenshots = db.get_force_recompressible_screenshots(
+                        older_than_days, limit=batch_size, offset=offset
+                    )
 
                     if not screenshots:
                         break
@@ -236,7 +236,6 @@ class CompressionService:
                     for screenshot in screenshots:
                         if self._cancel_requested:
                             break
-                        processed_ids.add(screenshot["id"])
                         try:
                             saved = self._compress_screenshot(screenshot, quality, force=True)
                             self._progress.processed += 1
@@ -247,6 +246,8 @@ class CompressionService:
 
                         if self._on_progress:
                             self._on_progress(self._progress)
+
+                    offset += batch_size
             finally:
                 self._progress.is_running = False
                 self._cancel_requested = False

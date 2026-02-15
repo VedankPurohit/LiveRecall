@@ -708,7 +708,9 @@ class Database:
             )
             return cur.fetchone()[0]
 
-    def get_force_recompressible_screenshots(self, older_than_days: int, limit: int | None = None) -> list[dict]:
+    def get_force_recompressible_screenshots(
+        self, older_than_days: int, limit: int | None = None, offset: int = 0
+    ) -> list[dict]:
         """Get all screenshots older than specified days (including already compressed)"""
         with self.cursor() as cur:
             query = """
@@ -717,13 +719,13 @@ class Database:
                 ORDER BY created_at ASC
             """
             days_ago = f"-{older_than_days} days"
+            params: list = [days_ago]
 
             if limit:
-                query += " LIMIT ?"
-                cur.execute(query, (days_ago, limit))
-            else:
-                cur.execute(query, (days_ago,))
+                query += " LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
 
+            cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
     def get_force_recompressible_count(self, older_than_days: int) -> dict:
