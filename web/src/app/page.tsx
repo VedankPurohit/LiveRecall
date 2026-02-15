@@ -73,6 +73,9 @@ function HomeContent() {
   const [showOCRModal, setShowOCRModal] = useState(false);
   const [ocrData, setOcrData] = useState<ScreenshotOCR | null>(null);
   const [isLoadingOCR, setIsLoadingOCR] = useState(false);
+  const [imageSearchPreview, setImageSearchPreview] = useState<string | null>(null);
+  const [imageSearchImage, setImageSearchImage] = useState<number | string | null>(null);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [datePreset, setDatePreset] = useState<string>('all');
   const [safeMode, setSafeMode] = useState(true);
   const [safeModeLevel, setSafeModeLevel] = useState<string>('mid');
@@ -119,6 +122,7 @@ function HomeContent() {
 
   const mainImageRef = useRef<HTMLImageElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const skipGalleryFetchRef = useRef(false); // Skip auto-fetch when navigating to specific position
   const skipLoadBeforeRef = useRef(false); // Skip "load before" after navigation to prevent immediate trigger
@@ -456,6 +460,25 @@ function HomeContent() {
   }, [query, hasTriggeredSync, status?.database.unsynced]);
 
   useEffect(() => {
+    // Image search by screenshot ID — re-runs when any filter changes
+    if (imageSearchImage !== null) {
+      const timer = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const startTime = performance.now();
+          const data = await search('', 50, safeMode, safeModeLevel, searchStartDate, searchEndDate, visibilityFilter, 'image', imageSearchImage);
+          setSearchResults(data.results);
+          setSearchTime(performance.now() - startTime);
+        } catch (err) {
+          console.error('Image search failed:', err);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
     if (!query.trim()) {
       setSearchResults([]);
       setSearchTime(null);
@@ -478,7 +501,7 @@ function HomeContent() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel, visibilityFilter, searchMode]);
+  }, [query, searchStartDate, searchEndDate, safeMode, safeModeLevel, visibilityFilter, searchMode, imageSearchImage]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -974,6 +997,44 @@ function HomeContent() {
     }
   }, []);
 
+
+  const findSimilarScreenshots = useCallback((screenshot: Screenshot) => {
+    setImageSearchPreview(getImageUrl(screenshot.image_path));
+    setImageSearchImage(screenshot.id);
+    setQuery('[find-similar]');
+    setSelectedImage(null);
+    setActiveView('search');
+  }, []);
+
+  const handleImageSearch = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 10 * 1024 * 1024) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setImageSearchPreview(previewUrl);
+    setQuery(`[image: ${file.name}]`);
+    setActiveView('search');
+
+    // Read file as base64 — the search effect handles the actual API call
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setImageSearchImage(base64);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const clearImageSearch = useCallback(() => {
+    if (imageSearchPreview && imageSearchPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(imageSearchPreview);
+    }
+    setImageSearchPreview(null);
+    setImageSearchImage(null);
+    setQuery('');
+    setSearchResults([]);
+    setSearchTime(null);
+  }, [imageSearchPreview]);
+
   // Copy OCR text to clipboard
   const copyOCRText = useCallback(() => {
     if (ocrData?.text) {
@@ -1096,29 +1157,81 @@ function HomeContent() {
       <div className="bg-black py-3 px-4">
         <div className="max-w-xl mx-auto">
           <div className="relative">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#555]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={handleSearchFocus}
-              placeholder="Search snapshots..."
-              className="w-full h-9 pl-9 pr-3 bg-[#0f0f0f] border border-[#1e1e1e] rounded-lg text-sm text-[#f5f5f5] placeholder-[#555] focus:border-[#86efac]/50 focus:outline-none transition-colors"
-            />
-            {isSearching && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border border-[#333] border-t-[#86efac] rounded-full animate-spin" />
+            {imageSearchPreview ? (
+              /* Image search active — show thumbnail chip */
+              <div className="flex items-center gap-2 h-9 px-3 bg-[#0f0f0f] border border-[#1e1e1e] rounded-lg">
+                <div className="w-6 h-6 rounded overflow-hidden border border-[#333] flex-shrink-0">
+                  <img src={imageSearchPreview} alt="" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-xs text-[#8a8a8a] flex-1 truncate">
+                  {searchResults.length} similar results
+                  {searchTime != null && <span className="ml-1.5 text-[#555]">{searchTime.toFixed(0)}ms</span>}
+                </span>
+                {isSearching ? (
+                  <div className="w-4 h-4 border border-[#333] border-t-[#86efac] rounded-full animate-spin flex-shrink-0" />
+                ) : (
+                  <button
+                    onClick={clearImageSearch}
+                    className="p-0.5 rounded text-[#555] hover:text-[#ef4444] transition-colors flex-shrink-0"
+                    title="Clear"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
+            ) : (
+              /* Normal text search bar */
+              <>
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#555]"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={handleSearchFocus}
+                  placeholder="Search snapshots..."
+                  className="w-full h-9 pl-9 pr-14 bg-[#0f0f0f] border border-[#1e1e1e] rounded-lg text-sm text-[#f5f5f5] placeholder-[#555] focus:border-[#86efac]/50 focus:outline-none transition-colors"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {!isSearching && (
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      className="p-1 rounded text-[#555] hover:text-[#86efac] transition-colors"
+                      title="Search by image"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                      </svg>
+                    </button>
+                  )}
+                  {isSearching && (
+                    <div className="w-4 h-4 border border-[#333] border-t-[#86efac] rounded-full animate-spin" />
+                  )}
+                </div>
+              </>
             )}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageSearch(file);
+                e.target.value = '';
+              }}
+            />
           </div>
         </div>
       </div>
@@ -1296,7 +1409,36 @@ function HomeContent() {
           </>
         ) : (
           /* Search View */
-          <div className="flex-1 flex flex-col min-h-0">
+          <div
+            className={`flex-1 flex flex-col min-h-0 relative ${isDraggingImage ? 'ring-2 ring-inset ring-[#86efac]/50' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.dataTransfer.types.includes('Files')) setIsDraggingImage(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingImage(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDraggingImage(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file && file.type.startsWith('image/')) handleImageSearch(file);
+            }}
+          >
+            {isDraggingImage && (
+              <div className="absolute inset-0 z-30 bg-black/80 flex items-center justify-center pointer-events-none rounded">
+                <div className="flex flex-col items-center gap-3 text-[#86efac]">
+                  <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                  </svg>
+                  <span className="text-sm font-medium">Drop image to search</span>
+                </div>
+              </div>
+            )}
             {/* Filters */}
             <div className="px-4 py-2 border-b border-[#1e1e1e] flex items-center justify-between">
               <div className="flex items-center gap-1">
@@ -1387,10 +1529,11 @@ function HomeContent() {
               </div>
               {/* Search mode selector */}
               <select
-                value={searchMode}
+                value={imageSearchPreview ? 'image' : searchMode}
                 onChange={(e) => setSearchMode(e.target.value as SearchMode)}
-                className="bg-[#0f0f0f] text-[#8a8a8a] px-2 py-1 rounded border border-[#1e1e1e] text-xs focus:border-[#86efac]/50 focus:outline-none"
-                title="Search mode"
+                disabled={!!imageSearchPreview}
+                className={`bg-[#0f0f0f] text-[#8a8a8a] px-2 py-1 rounded border border-[#1e1e1e] text-xs focus:border-[#86efac]/50 focus:outline-none ${imageSearchPreview ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={imageSearchPreview ? 'Image search uses Image Only mode' : 'Search mode'}
               >
                 <option value="auto">Auto (Hybrid)</option>
                 <option value="image">Image Only</option>
@@ -1401,7 +1544,7 @@ function HomeContent() {
 
             {/* Results info */}
             <div className="px-4 py-2 text-xs text-[#555]">
-              {query.trim() ? (
+              {(query.trim() || imageSearchPreview) ? (
                 <>
                   {searchResults.length} results
                   {searchTime != null && <span className="ml-2 text-[#444]">{searchTime.toFixed(0)}ms</span>}
@@ -1571,6 +1714,7 @@ function HomeContent() {
         </div>
       </footer>
 
+      {/* Toast */}
       {/* Lightbox */}
       {selectedImage && (
         <div
@@ -1633,6 +1777,18 @@ function HomeContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
               View Text
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                findSimilarScreenshots(selectedImage);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 text-[#38bdf8] rounded text-xs border border-[#38bdf8]/30 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              Find Similar
             </button>
           </div>
         </div>

@@ -604,6 +604,18 @@ class Database:
             cur.execute("UPDATE screenshots SET has_embedding = 1 WHERE id = ?", (screenshot_id,))
             return True
 
+    def get_embedding(self, screenshot_id: int) -> list[float] | None:
+        """Get the stored CLIP embedding for a screenshot"""
+        with self.cursor() as cur:
+            cur.execute(
+                "SELECT embedding FROM screenshot_embeddings WHERE screenshot_id = ?",
+                (screenshot_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return deserialize_embedding(row["embedding"])
+
     def search_similar(
         self,
         query_embedding: list[float],
@@ -649,7 +661,7 @@ class Database:
                     {vis_condition}
                 ORDER BY e.distance ASC
             """,
-                (query_bytes, limit * 2 if visibility != "all" else limit),
+                (query_bytes, limit * 10 if visibility != "all" else limit),
             )
 
             results = []

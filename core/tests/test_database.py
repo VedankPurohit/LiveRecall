@@ -131,6 +131,23 @@ class TestEmbeddings:
         assert results[0]["id"] == screenshot_id
         assert "similarity" in results[0]
 
+    def test_get_embedding(self, mock_db, sample_screenshot, mock_embedding):
+        """Should retrieve stored embedding for a screenshot"""
+        screenshot_id = mock_db.add_screenshot(str(sample_screenshot))
+        mock_db.add_embedding(screenshot_id, mock_embedding)
+
+        result = mock_db.get_embedding(screenshot_id)
+        assert result is not None
+        assert len(result) == 768
+        # Check values are close (float serialization may lose precision)
+        for orig, retrieved in zip(mock_embedding, result, strict=False):
+            assert abs(orig - retrieved) < 1e-5
+
+    def test_get_embedding_not_found(self, mock_db):
+        """Should return None for screenshot without embedding"""
+        result = mock_db.get_embedding(99999)
+        assert result is None
+
 
 class TestCompression:
     """Test compression-related database operations"""
