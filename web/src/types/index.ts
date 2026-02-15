@@ -72,6 +72,7 @@ export interface CaptureConfig {
   threshold: number;
   save_threshold: number;
   quality: number;
+  max_time_without_save: number;
 }
 
 export interface CompressionConfig {

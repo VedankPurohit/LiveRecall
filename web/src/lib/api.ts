@@ -64,6 +64,7 @@ export async function updateConfig(updates: Partial<{
   capture_threshold: number;
   capture_save_threshold: number;
   capture_quality: number;
+  capture_max_time_without_save: number;
   compression_enabled: boolean;
   compression_after_days: number;
   compression_quality: number;
