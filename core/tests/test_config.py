@@ -102,7 +102,7 @@ class TestCompressionSettings:
         settings = CompressionSettings()
         assert settings.enabled is False  # Off by default
         assert settings.after_days == 60
-        assert settings.quality == 85
+        assert settings.quality == 75
 
     def test_quality_range(self):
         """Quality should be reasonable"""

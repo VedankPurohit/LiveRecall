@@ -267,6 +267,199 @@ class TestCompressionEndpoints:
         assert data["compressed_count"] == 50
         assert data["compressible_count"] == 20
 
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_preview(self, mock_db, mock_service):
+        """Should return force recompress preview"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_db.get_force_recompressible_count.return_value = {
+            "total": 100,
+            "already_compressed": 30,
+            "not_compressed": 70,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress/preview",
+            json={"older_than_days": 60},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 100
+        assert data["already_compressed_count"] == 30
+        assert data["not_compressed_count"] == 70
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_preview_with_warning(self, mock_db, mock_service):
+        """Should include warning when already-compressed screenshots exist"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_db.get_force_recompressible_count.return_value = {
+            "total": 50,
+            "already_compressed": 20,
+            "not_compressed": 30,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress/preview",
+            json={"older_than_days": 90},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "20" in data["warning"]
+        assert "already compressed" in data["warning"]
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_requires_confirm(self, mock_db, mock_service):
+        """Should reject without confirm=true"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress",
+            json={"older_than_days": 60, "confirm": False},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "confirm" in data["message"].lower()
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_already_running(self, mock_db, mock_service):
+        """Should not start if compression already running"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_service.is_running = True
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress",
+            json={"older_than_days": 60, "confirm": True},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "already running" in data["message"]
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_success(self, mock_db, mock_service):
+        """Should start force recompression"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_service.is_running = False
+        mock_db.get_force_recompressible_count.return_value = {
+            "total": 50,
+            "already_compressed": 10,
+            "not_compressed": 40,
+        }
+        mock_service.start_force_recompress.return_value = True
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress",
+            json={"older_than_days": 60, "confirm": True},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["affected_count"] == 50
+        mock_service.start_force_recompress.assert_called_once()
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_no_eligible(self, mock_db, mock_service):
+        """Should handle no eligible screenshots"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_service.is_running = False
+        mock_db.get_force_recompressible_count.return_value = {
+            "total": 0,
+            "already_compressed": 0,
+            "not_compressed": 0,
+        }
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress",
+            json={"older_than_days": 365, "confirm": True},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["affected_count"] == 0
+
+    @patch("api.routes.compression.compression_service")
+    @patch("api.routes.compression.db")
+    def test_force_recompress_start_fails(self, mock_db, mock_service):
+        """Should handle TOCTOU race where start returns False"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.compression import router
+
+        mock_service.is_running = False
+        mock_db.get_force_recompressible_count.return_value = {
+            "total": 10,
+            "already_compressed": 5,
+            "not_compressed": 5,
+        }
+        mock_service.start_force_recompress.return_value = False
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/compression/force-recompress",
+            json={"older_than_days": 60, "confirm": True},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "failed" in data["message"].lower() or "already" in data["message"].lower()
+
 
 class TestSearchEndpoints:
     """Test search API endpoints"""
