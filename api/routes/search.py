@@ -58,13 +58,45 @@ async def search_screenshots(request: SearchRequest):
             detail="No synced screenshots. Run sync first to generate embeddings.",
         )
 
+    # Validate: need either query or image
+    if not request.query and request.image is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Either query or image must be provided.",
+        )
+
     # Generate embeddings based on search mode
     image_embedding = None
     text_embedding = None
 
+    # When image param is provided, use it for embedding
+    if request.image is not None:
+        if isinstance(request.image, int):
+            # Screenshot ID — use stored embedding
+            image_embedding = db.get_embedding(request.image)
+            if image_embedding is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Screenshot has no embedding. Run sync first.",
+                )
+        else:
+            # Base64 image data — generate embedding from bytes
+            import base64
+
+            try:
+                image_bytes = base64.b64decode(request.image)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail="Invalid base64 image data") from e
+            from core.embeddings import get_image_embedding_from_bytes
+
+            try:
+                image_embedding = get_image_embedding_from_bytes(image_bytes)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to process image: {e}") from e
+
     try:
-        # CLIP image embedding (for image and auto modes)
-        if request.search_mode in (SearchMode.AUTO, SearchMode.IMAGE):
+        if request.image is None and request.search_mode in (SearchMode.AUTO, SearchMode.IMAGE):
+            # CLIP image embedding (for image and auto modes)
             if request.safe_mode:
                 image_embedding = get_safe_search_embedding(
                     text=request.query,
@@ -79,8 +111,8 @@ async def search_screenshots(request: SearchRequest):
             else:
                 image_embedding = get_text_embedding(request.query)
 
-        # BGE text embedding (for text_semantic and auto modes)
-        if request.search_mode in (SearchMode.AUTO, SearchMode.TEXT_SEMANTIC):
+        # BGE text embedding (for text_semantic and auto modes) - skip when using image query
+        if request.image is None and request.search_mode in (SearchMode.AUTO, SearchMode.TEXT_SEMANTIC):
             # Lazy import to avoid loading text model if not needed
             from core.text_embeddings import text_embedding_service
 
@@ -166,6 +198,10 @@ async def search_screenshots(request: SearchRequest):
             if len(filtered_results) >= request.limit:
                 break
         results = filtered_results
+
+    # Filter out the source screenshot when searching by ID
+    if isinstance(request.image, int):
+        results = [r for r in results if r["id"] != request.image]
 
     # Convert to response
     search_results = [

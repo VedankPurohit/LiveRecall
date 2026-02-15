@@ -10,37 +10,31 @@ dependencies = [
     "pillow==10.3.0",
     "requests>=2.32.4",
     "tqdm>=4.67.1",
-
     # Image processing
     "opencv-python==4.9.0.80",
     "opencv-python-headless==4.9.0.80",
     "scikit-image",
-
     # Screen capture (cross-platform)
     "mss>=9.0.0",
-
     # Database (SQLite + vector search)
     "sqlite-vec>=0.1.1",
-
     # ML / Embeddings (lazy loaded)
     "sentence-transformers==2.7.0",
     "torch==2.3.0",
     "transformers>=4.55.2",
-
     # OCR (lazy loaded, platform-specific)
     # Apple Vision via ocrmac (macOS only, uses native Vision framework)
     "ocrmac>=1.0.0; sys_platform == 'darwin'",
     # Tesseract OCR (cross-platform fallback)
     "pytesseract>=0.3.10",
-
     # API
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "pydantic>=2.0.0",
-
     # System tray
     "pystray>=0.19.0",
     "httpx>=0.27.0",
+    "python-multipart>=0.0.22",
 ]
 
 [project.optional-dependencies]

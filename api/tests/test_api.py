@@ -522,6 +522,183 @@ class TestSearchEndpoints:
         assert len(data["results"]) == 1
 
 
+class TestSearchByImageParam:
+    """Test search with image parameter (find similar via main search endpoint)"""
+
+    @patch("api.routes.search.config")
+    @patch("api.routes.search.db")
+    def test_search_with_image_param(self, mock_db, mock_config):
+        """Should use stored embedding when image param is provided"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_config.similarity_metric = "cosine"
+        mock_db.get_stats.return_value = {"synced": 100}
+        mock_db.get_embedding.return_value = [0.1] * 768
+        mock_db.search_similar.return_value = [
+            {
+                "id": 1,
+                "image_path": "/path/to/img.jpg",
+                "timestamp": "251206120000",
+                "similarity": 1.0,
+            },
+            {
+                "id": 2,
+                "image_path": "/path/to/img2.jpg",
+                "timestamp": "251206120100",
+                "similarity": 0.85,
+            },
+        ]
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "image": 1,
+                "limit": 10,
+                "search_mode": "image",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Source screenshot (id=1) should be filtered out
+        assert data["total_results"] == 1
+        assert data["results"][0]["id"] == 2
+
+    @patch("api.routes.search.db")
+    def test_search_with_image_no_embedding(self, mock_db):
+        """Should 400 if screenshot has no embedding"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 100}
+        mock_db.get_embedding.return_value = None
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "image": 99999,
+                "limit": 10,
+            },
+        )
+        assert response.status_code == 400
+        assert "no embedding" in response.json()["detail"].lower()
+
+    @patch("api.routes.search.db")
+    def test_search_needs_query_or_image(self, mock_db):
+        """Should 400 if neither query nor image provided"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 100}
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        response = client.post(
+            "/search",
+            json={
+                "limit": 10,
+            },
+        )
+        assert response.status_code == 400
+
+
+class TestSearchByBase64Image:
+    """Test search with base64 image data via POST /search"""
+
+    @patch("api.routes.search.config")
+    @patch("api.routes.search.db")
+    @patch("core.embeddings.get_image_embedding_from_bytes")
+    def test_search_with_base64_image(self, mock_embed, mock_db, mock_config):
+        """Should generate embedding from base64 and return results"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_config.similarity_metric = "cosine"
+        mock_db.get_stats.return_value = {"synced": 10}
+        mock_embed.return_value = [0.1] * 768
+        mock_db.search_similar.return_value = [
+            {
+                "id": 1,
+                "image_path": "/path/to/img.jpg",
+                "timestamp": "251206120000",
+                "similarity": 0.9,
+            },
+        ]
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        # Create a minimal valid JPEG and encode as base64
+        import base64
+        from io import BytesIO
+
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (10, 10)).save(buf, "JPEG")
+        image_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        response = client.post(
+            "/search",
+            json={
+                "image": image_b64,
+                "limit": 10,
+                "search_mode": "image",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_results"] == 1
+        mock_embed.assert_called_once()
+
+    @patch("core.embeddings.get_image_embedding_from_bytes")
+    @patch("api.routes.search.db")
+    def test_search_with_bad_image_data(self, mock_db, mock_embed):
+        """Should 400 for base64 data that isn't a valid image"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.routes.search import router
+
+        mock_db.get_stats.return_value = {"synced": 10}
+        mock_embed.side_effect = Exception("cannot identify image file")
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        import base64
+
+        bad_b64 = base64.b64encode(b"not an image").decode()
+        response = client.post(
+            "/search",
+            json={
+                "image": bad_b64,
+                "limit": 10,
+            },
+        )
+        assert response.status_code == 400
+
+
 class TestRecordingEndpoints:
     """Test recording API endpoints"""
 

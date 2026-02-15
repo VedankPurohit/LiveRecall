@@ -197,6 +197,24 @@ def get_image_embedding(image_path: str) -> list[float]:
         raise
 
 
+def get_image_embedding_from_bytes(image_bytes: bytes) -> list[float]:
+    """Generate normalized embedding for an image from raw bytes"""
+    global _last_used
+
+    model = _load_model()
+    _last_used = time.time()
+
+    try:
+        import io
+
+        image = Image.open(io.BytesIO(image_bytes))
+        embedding = model.encode(image, convert_to_tensor=False)
+        return _normalize(embedding)
+    except Exception as e:
+        print(f"Error generating image embedding from bytes: {e}")
+        raise
+
+
 def get_text_embedding(text: str) -> list[float]:
     """Generate normalized embedding for a text query"""
     global _last_used

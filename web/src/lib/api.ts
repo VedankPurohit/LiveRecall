@@ -87,12 +87,14 @@ export async function search(
   startDate?: string,
   endDate?: string,
   visibility: VisibilityFilter = 'visible_only',
-  searchMode: SearchMode = 'auto'
+  searchMode: SearchMode = 'auto',
+  image?: number | string
 ): Promise<SearchResult> {
   return fetchApi('/search', {
     method: 'POST',
     body: JSON.stringify({
-      query,
+      query: query || '',
+      image,
       limit,
       safe_mode: safeMode,
       safe_mode_level: safeModeLevel ?? 'mid',
@@ -119,6 +121,7 @@ export async function searchWithParams(params: SearchParams): Promise<SearchResu
     }),
   });
 }
+
 
 // Recording
 export async function startRecording(): Promise<ApiResponse<void>> {

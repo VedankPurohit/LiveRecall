@@ -208,7 +208,10 @@ class SearchMode(str, Enum):
 class SearchRequest(BaseModel):
     """Search request with mode selection"""
 
-    query: str = Field(..., min_length=1, max_length=500)
+    query: str = Field(default="", max_length=500)
+    image: int | str | None = Field(
+        default=None, description="Screenshot ID (int) or base64 image data (string) to use as image query"
+    )
     limit: int = Field(default=20, ge=1, le=100)
     search_mode: SearchMode = Field(
         default=SearchMode.AUTO,
