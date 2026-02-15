@@ -495,7 +495,7 @@ class ConfigUpdateRequest(BaseModel):
     capture_interval: float | None = Field(None, ge=0.5, le=60.0)
     capture_threshold: float | None = Field(None, ge=0.5, le=0.99)
     capture_quality: int | None = Field(None, ge=50, le=100)
-    capture_max_time_without_save: float | None = Field(None, ge=0, le=300)
+    capture_max_time_without_save: float | None = Field(None, ge=0, le=120)
     compression_enabled: bool | None = None
     compression_after_days: int | None = Field(None, ge=7, le=365)
     compression_quality: int | None = Field(None, ge=50, le=90)
