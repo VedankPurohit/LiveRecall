@@ -70,11 +70,13 @@ async def lifespan(app: FastAPI):
     from core.capture import capture_service
     from core.embeddings import unload_model
     from core.processor import processor_service
+    from core.text_embeddings import unload_model as unload_text_embedding_model
 
     # Stop services
     capture_service.stop()
     processor_service.stop()
     unload_model()
+    unload_text_embedding_model()
     db.disconnect()
     print("✅ Shutdown complete")
 

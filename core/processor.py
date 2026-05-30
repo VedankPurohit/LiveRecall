@@ -117,6 +117,14 @@ class ProcessorService:
             self._chunking_module = chunking
         return self._chunking_module
 
+    def _unload_models(self):
+        """Unload both embedding models after heavy processing completes."""
+        from core.embeddings import unload_model as unload_clip_model
+        from core.text_embeddings import unload_model as unload_text_embedding_model
+
+        unload_clip_model()
+        unload_text_embedding_model()
+
     @property
     def is_running(self) -> bool:
         return self._running
@@ -177,6 +185,7 @@ class ProcessorService:
         # Mark as complete
         self._running = False
         self._progress.is_running = False
+        self._unload_models()
         print(f"✅ OCR migration complete: {self._progress.processed} processed, {self._progress.errors} errors")
 
     def stop(self):
@@ -186,6 +195,7 @@ class ProcessorService:
         if self._thread:
             self._thread.join(timeout=10)
             self._thread = None
+        self._unload_models()
 
     def sync_all(self, on_progress: Callable[[SyncProgress], None] | None = None):
         """Synchronously process all unsynced screenshots (blocking)"""
@@ -223,6 +233,7 @@ class ProcessorService:
                 self._on_progress(self._progress)
 
         self._progress.is_running = False
+        self._unload_models()
         if self._on_progress:
             self._on_progress(self._progress)
 
@@ -310,6 +321,7 @@ class ProcessorService:
         # Mark as complete
         self._running = False
         self._progress.is_running = False
+        self._unload_models()
         print(f"✅ Sync complete: {self._progress.processed} processed, {self._progress.errors} errors")
 
     def _process_ocr_for_screenshot(self, screenshot_id: int, image_path: str):
@@ -491,6 +503,7 @@ class ProcessorService:
                     self._on_progress(self._progress)
 
         self._progress.is_running = False
+        self._unload_models()
         if self._on_progress:
             self._on_progress(self._progress)
 

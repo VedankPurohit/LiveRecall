@@ -419,7 +419,7 @@ class DatabaseStats(BaseModel):
 
 
 class ModelStatus(BaseModel):
-    """CLIP model status"""
+    """Model status"""
 
     loaded: bool
     device: str | None
@@ -435,6 +435,7 @@ class SystemStatus(BaseModel):
     recording: RecordingStatus
     database: DatabaseStats
     model: ModelStatus
+    text_model: ModelStatus | None = None
     incognito: IncognitoStatus
     data_directory: str
 
@@ -446,6 +447,7 @@ class SystemStatus(BaseModel):
                 "recording": {"is_recording": False, "mode": "normal", "interval": 2.0, "threshold": 0.9},
                 "database": {"total_screenshots": 1247, "synced": 1200, "unsynced": 47},
                 "model": {"loaded": False, "device": None, "idle_seconds": 0, "auto_unload_seconds": 300},
+                "text_model": {"loaded": False, "device": None, "idle_seconds": 0, "auto_unload_seconds": 300},
                 "incognito": {"active": False, "remaining_seconds": 0, "until_timestamp": None},
                 "data_directory": "~/Library/Application Support/LiveRecall",
             }

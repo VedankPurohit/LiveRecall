@@ -4,6 +4,8 @@ Lazy-loaded CLIP model for generating image and text embeddings
 With auto-unload capability for memory management
 """
 
+import contextlib
+import gc
 import os
 import threading
 import time
@@ -77,6 +79,10 @@ def _schedule_auto_unload():
     if _auto_unload_timer is not None:
         _auto_unload_timer.cancel()
 
+    if AUTO_UNLOAD_SECONDS <= 0:
+        _auto_unload_timer = None
+        return
+
     # Schedule new timer
     _auto_unload_timer = threading.Timer(AUTO_UNLOAD_SECONDS, _check_and_unload)
     _auto_unload_timer.daemon = True
@@ -101,26 +107,26 @@ def unload_model():
     global _model, _device, _auto_unload_timer
 
     with _lock:
+        if _auto_unload_timer is not None:
+            _auto_unload_timer.cancel()
+            _auto_unload_timer = None
+
         if _model is None:
             return
 
         print("Unloading CLIP model...")
 
-        # Cancel auto-unload timer
-        if _auto_unload_timer is not None:
-            _auto_unload_timer.cancel()
-            _auto_unload_timer = None
-
         # Delete model
         del _model
         _model = None
+        gc.collect()
 
         # Clear GPU memory if applicable
         if _device == "cuda":
             torch.cuda.empty_cache()
         elif _device == "mps":
-            # MPS doesn't have explicit cache clearing
-            pass
+            with contextlib.suppress(Exception):
+                torch.mps.empty_cache()
 
         _device = None
         print("CLIP model unloaded")
@@ -189,8 +195,8 @@ def get_image_embedding(image_path: str) -> list[float]:
     _last_used = time.time()
 
     try:
-        image = Image.open(image_path)
-        embedding = model.encode(image, convert_to_tensor=False)
+        with Image.open(image_path) as image:
+            embedding = model.encode(image, convert_to_tensor=False)
         return _normalize(embedding)
     except Exception as e:
         print(f"Error generating image embedding: {e}")

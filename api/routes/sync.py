@@ -32,6 +32,15 @@ from core.embeddings import (
     unload_model,
 )
 from core.processor import SyncProgress, processor_service
+from core.text_embeddings import (
+    is_loaded as is_text_model_loaded,
+)
+from core.text_embeddings import (
+    set_auto_unload_timeout as set_text_auto_unload_timeout,
+)
+from core.text_embeddings import (
+    unload_model as unload_text_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,22 +162,26 @@ async def get_model_status_endpoint():
 @router.post("/model/unload", response_model=SuccessResponse)
 async def unload_model_endpoint():
     """
-    Manually unload the CLIP model to free memory.
+    Manually unload the embedding models to free memory.
 
-    The model will be automatically reloaded when needed
+    The models will be automatically reloaded when needed
     (on next search or sync).
     """
-    if not is_loaded():
+    clip_loaded = is_loaded()
+    text_loaded = is_text_model_loaded()
+
+    if not clip_loaded and not text_loaded:
         return SuccessResponse(
             success=True,
-            message="Model is not loaded",
+            message="Models are not loaded",
         )
 
     unload_model()
+    unload_text_model()
 
     return SuccessResponse(
         success=True,
-        message="Model unloaded successfully",
+        message="Embedding models unloaded successfully",
     )
 
 
@@ -189,6 +202,7 @@ async def set_auto_unload(seconds: int):
         )
 
     set_auto_unload_timeout(seconds)
+    set_text_auto_unload_timeout(seconds)
 
     if seconds == 0:
         return SuccessResponse(

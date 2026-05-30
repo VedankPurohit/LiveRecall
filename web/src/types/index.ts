@@ -56,8 +56,10 @@ export interface SystemStatus {
   recording: RecordingStatus;
   database: DatabaseStats;
   model: ModelStatus;
+  text_model?: ModelStatus | null;
   incognito: IncognitoStatus;
-  data_dir: string;
+  data_dir?: string;
+  data_directory?: string;
 }
 
 export interface HealthResponse {

@@ -24,6 +24,8 @@ from core.capture import capture_service
 from core.config import config
 from core.database import db
 from core.embeddings import get_model_status, set_auto_unload_timeout
+from core.text_embeddings import get_model_status as get_text_model_status
+from core.text_embeddings import set_auto_unload_timeout as set_text_auto_unload_timeout
 
 # Version
 VERSION = "2.0.0"
@@ -65,6 +67,14 @@ async def get_system_status():
         auto_unload_seconds=model_status["auto_unload_seconds"],
     )
 
+    text_model_status = get_text_model_status()
+    text_model = ModelStatus(
+        loaded=text_model_status["loaded"],
+        device=text_model_status["device"],
+        idle_seconds=text_model_status["idle_seconds"],
+        auto_unload_seconds=text_model_status["auto_unload_seconds"],
+    )
+
     # Incognito status
     is_incognito_active = config.is_incognito_mode()
     incognito = IncognitoStatus(
@@ -79,6 +89,7 @@ async def get_system_status():
         recording=recording,
         database=database,
         model=model,
+        text_model=text_model,
         incognito=incognito,
         data_directory=str(config.data_dir),
     )
@@ -170,6 +181,7 @@ async def update_config(request: ConfigUpdateRequest):
 
     if request.auto_unload_seconds is not None:
         set_auto_unload_timeout(request.auto_unload_seconds)
+        set_text_auto_unload_timeout(request.auto_unload_seconds)
         updated.append(f"auto_unload_seconds={request.auto_unload_seconds}")
 
     if not updated:

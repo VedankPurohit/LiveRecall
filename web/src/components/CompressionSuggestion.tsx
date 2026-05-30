@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getCompressionStats, updateConfig, startCompression } from '@/lib/api';
 import type { CompressionStats } from '@/types';
 
@@ -18,6 +18,8 @@ export function CompressionSuggestion() {
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
   const [enabling, setEnabling] = useState(false);
+  const animationFrameRef = useRef<number | null>(null);
+  const dismissTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem(DISMISSED_KEY)) return;
@@ -27,7 +29,7 @@ export function CompressionSuggestion() {
         const data = await getCompressionStats();
         if (data.compressible_count > 0) {
           setStats(data);
-          requestAnimationFrame(() => setVisible(true));
+          animationFrameRef.current = requestAnimationFrame(() => setVisible(true));
         }
       } catch {
         // Silently fail
@@ -35,12 +37,21 @@ export function CompressionSuggestion() {
     };
 
     fetchStats();
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (dismissTimeoutRef.current !== null) {
+        clearTimeout(dismissTimeoutRef.current);
+      }
+    };
   }, []);
 
   const dismiss = () => {
     localStorage.setItem(DISMISSED_KEY, Date.now().toString());
     setExiting(true);
-    setTimeout(() => setVisible(false), 300);
+    dismissTimeoutRef.current = window.setTimeout(() => setVisible(false), 300);
   };
 
   const handleEnable = async () => {

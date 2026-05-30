@@ -183,6 +183,14 @@ function HomeContent() {
     router.push('/', { scroll: false });
   }, [router]);
 
+  useEffect(() => {
+    return () => {
+      if (imageSearchPreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSearchPreview);
+      }
+    };
+  }, [imageSearchPreview]);
+
   // Fetch incognito status
   useEffect(() => {
     const fetchIncognitoStatus = async () => {
@@ -1025,15 +1033,12 @@ function HomeContent() {
   }, []);
 
   const clearImageSearch = useCallback(() => {
-    if (imageSearchPreview && imageSearchPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imageSearchPreview);
-    }
     setImageSearchPreview(null);
     setImageSearchImage(null);
     setQuery('');
     setSearchResults([]);
     setSearchTime(null);
-  }, [imageSearchPreview]);
+  }, []);
 
   // Copy OCR text to clipboard
   const copyOCRText = useCallback(() => {

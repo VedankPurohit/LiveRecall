@@ -31,6 +31,8 @@ To switch model:
 
 from __future__ import annotations
 
+import contextlib
+import gc
 import os
 import threading
 import time
@@ -139,23 +141,26 @@ def unload_model():
     global _model, _device, _auto_unload_timer
 
     with _lock:
+        if _auto_unload_timer is not None:
+            _auto_unload_timer.cancel()
+            _auto_unload_timer = None
+
         if _model is None:
             return
 
         print("Unloading text embedding model...")
 
-        # Cancel auto-unload timer
-        if _auto_unload_timer is not None:
-            _auto_unload_timer.cancel()
-            _auto_unload_timer = None
-
         # Delete model
         del _model
         _model = None
+        gc.collect()
 
         # Clear GPU memory if applicable
         if _device == "cuda":
             torch.cuda.empty_cache()
+        elif _device == "mps":
+            with contextlib.suppress(Exception):
+                torch.mps.empty_cache()
 
         _device = None
         print("Text embedding model unloaded")
