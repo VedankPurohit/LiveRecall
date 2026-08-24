@@ -107,6 +107,14 @@ function formatTimestamp(ts: string): string {
   });
 }
 
+function formatChartLabelAsDate(label: unknown): string {
+  if (typeof label !== 'string' && typeof label !== 'number' && !(label instanceof Date)) {
+    return '';
+  }
+  const parsed = new Date(label);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+}
+
 // Info tooltip component
 function InfoTooltip({ text }: { text: string }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -705,7 +713,7 @@ export default function AnalyticsPage() {
                             color: '#f5f5f5',
                           }}
                           formatter={(value) => [formatBytes(value as number), 'Storage']}
-                          labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                          labelFormatter={formatChartLabelAsDate}
                         />
                         <Area
                           type="monotone"
@@ -810,7 +818,7 @@ export default function AnalyticsPage() {
                             value,
                             name === 'count' ? 'Screenshots' : '7-day Avg',
                           ]}
-                          labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                          labelFormatter={formatChartLabelAsDate}
                         />
                         <Area
                           type="monotone"

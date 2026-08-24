@@ -912,8 +912,9 @@ class AnalyticsGapsResponse(BaseModel):
 
 
 class SizeDistributionEntry(BaseModel):
-    range: str
+    label: str
     count: int
+    percentage: float
 
 
 class QualityCompressionStats(BaseModel):

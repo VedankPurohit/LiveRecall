@@ -244,12 +244,12 @@ def get_storage_analytics(
                         "id": row[0],
                         "path": row[1],
                         "timestamp": row[2],
-                        "size_bytes": size,
+                        "size": size,
                     }
                 )
 
         # Sort by size and take top 10
-        largest_files.sort(key=lambda x: x["size_bytes"], reverse=True)
+        largest_files.sort(key=lambda x: x["size"], reverse=True)
         largest_files = largest_files[:10]
 
         # Storage by month
@@ -257,7 +257,8 @@ def get_storage_analytics(
             """
             SELECT
                 substr(timestamp, 1, 4) as month,
-                COUNT(*) as count
+                COUNT(*) as count,
+                SUM(original_size_bytes) as total_bytes
             FROM screenshots
             GROUP BY month
             ORDER BY month DESC
@@ -268,13 +269,16 @@ def get_storage_analytics(
         storage_by_month = []
         for row in cur.fetchall():
             month_str = row[0]  # YYMM format
+            count = row[1]
+            total_bytes = row[2] or 0
             if len(month_str) == 4:
                 year = 2000 + int(month_str[0:2])
                 month = int(month_str[2:4])
                 storage_by_month.append(
                     {
                         "month": f"{year}-{month:02d}",
-                        "count": row[1],
+                        "count": count,
+                        "bytes": total_bytes,
                     }
                 )
 
@@ -338,22 +342,28 @@ def get_activity_analytics(
             weekly_data[week_key] = weekly_data.get(week_key, 0) + 1
 
         # Convert heatmap to list format
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         heatmap_data = []
         for day in range(7):
+            day_name = day_names[day]
             for hour in range(24):
                 count = heatmap[day][hour]
                 if count > 0:  # Only include non-zero for efficiency
+                    # Generate a dummy date for the heatmap item (e.g., latest Monday of the period)
+                    # HeatmapItem in schema requires 'date' and 'day_label'
                     heatmap_data.append(
                         {
                             "day_of_week": day,
+                            "day_label": day_name,
                             "hour": hour,
                             "count": count,
+                            "date": end_date.strftime("%Y-%m-%d"), # Simple approximation
                         }
                     )
 
         # Convert distributions to sorted lists
         hourly_distribution = [{"hour": h, "count": hourly_totals[h]} for h in range(24)]
-        daily_distribution = [{"day": d, "count": daily_totals[d]} for d in range(7)]
+        daily_distribution = [{"day": day_names[d], "count": daily_totals[d]} for d in range(7)]
 
         # Weekly trend (sorted by date)
         weekly_trend = [{"week": k, "count": v} for k, v in sorted(weekly_data.items())]
@@ -361,8 +371,6 @@ def get_activity_analytics(
         # Find peak times
         max_hour = max(hourly_totals.items(), key=lambda x: x[1])
         max_day = max(daily_totals.items(), key=lambda x: x[1])
-
-        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
     return {
         "heatmap_data": heatmap_data,
@@ -617,6 +625,11 @@ def get_quality_analytics():
             "median_file_size": 0,
             "size_distribution": [],
             "total_files": 0,
+            "compression_stats": {
+                "compressed_count": 0,
+                "uncompressed_count": 0,
+                "original_bytes_before_compression": 0,
+            },
         }
 
     file_sizes.sort()
