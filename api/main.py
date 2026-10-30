@@ -26,7 +26,7 @@ async def _auto_compress():
     while True:
         try:
             if config.compression.enabled and not compression_service.is_running:
-                compression_service.start()
+                compression_service.start(image_format=config.compression.image_format)
         except Exception:
             logging.getLogger(__name__).exception("Could not start automatic compression")
         await asyncio.sleep(3600)

@@ -53,7 +53,8 @@ class CompressionSettings:
 
     enabled: bool = False  # Off by default
     after_days: int = 60  # Compress screenshots older than 2 months
-    quality: int = 75  # JPEG quality for compressed images
+    quality: int = 75  # Encoder quality for compressed images
+    image_format: Literal["jpeg", "webp"] = "jpeg"
 
 
 # =============================================================================
@@ -247,6 +248,7 @@ class Config:
                 "enabled": self.compression.enabled,
                 "after_days": self.compression.after_days,
                 "quality": self.compression.quality,
+                "image_format": self.compression.image_format,
             },
             "incognito": {
                 "active": self.incognito.active,
@@ -303,6 +305,8 @@ class Config:
                 self.compression.enabled = comp.get("enabled", self.compression.enabled)
                 self.compression.after_days = comp.get("after_days", self.compression.after_days)
                 self.compression.quality = comp.get("quality", self.compression.quality)
+                image_format = comp.get("image_format", "jpeg")
+                self.compression.image_format = image_format if image_format in ("jpeg", "webp") else "jpeg"
 
             # Load incognito settings
             if "incognito" in data:

@@ -82,7 +82,7 @@ async def start_compression(request: CompressionStartRequest = None):
     compression_service.start(
         older_than_days=older_than_days,
         quality=quality,
-        image_format=request.image_format if request else "jpeg",
+        image_format=(request.image_format if request else None) or config.compression.image_format,
     )
 
     return CompressionStartResponse(
@@ -187,7 +187,7 @@ async def start_force_recompress(request: ForceRecompressRequest):
     started = compression_service.start_force_recompress(
         older_than_days=request.older_than_days,
         quality=request.quality,
-        image_format=request.image_format,
+        image_format=request.image_format or config.compression.image_format,
     )
 
     if not started:

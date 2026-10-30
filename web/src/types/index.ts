@@ -81,6 +81,7 @@ export interface CompressionConfig {
   enabled: boolean;
   after_days: number;
   quality: number;
+  image_format: 'jpeg' | 'webp';
 }
 
 export interface AppConfig {

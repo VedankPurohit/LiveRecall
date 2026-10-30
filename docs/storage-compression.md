@@ -5,10 +5,16 @@ read any frame without a video decoder or a shared frame dependency.
 
 The existing automatic compression setting now checks for eligible images at API
 startup and hourly afterward. It remains disabled by default. It uses the saved
-age and JPEG quality settings. Manual compression and automatic compression share
+age, format, and quality settings. Manual compression and automatic compression share
 one worker. A failed or missing image does not block later images.
 
-WebP is an opt-in format for manual compression. For example, send this JSON to
+Choose JPEG or WebP under Settings > Storage > Compression format. JPEG remains
+the default for existing settings files and new installations. The saved choice
+applies to automatic compression, Compress now, and confirmed force recompression.
+Changing it does not convert images already marked compressed. WebP usually
+reduces bytes more and takes more encoding CPU; both choices are lossy.
+
+An API request can override the saved format for one operation. Send this JSON to
 `POST /api/v1/compression/start`:
 
 ```json
@@ -24,7 +30,10 @@ automatically convert any existing library to WebP.
 The compressor writes one candidate in the screenshot directory, flushes and
 fsyncs it, and fully decodes it before touching the database. It discards candidates
 that are as large as the original. For smaller candidates, one database
-transaction updates the path and compression metadata. Only after that commit
+transaction updates the path and compression metadata. On POSIX systems it also
+fsyncs the parent directory before the transaction, so the new directory entry
+precedes the database reference. A directory-sync failure aborts the replacement
+and leaves the original intact. Only after a successful commit
 does it delete the original. OCR text, embeddings, screenshot IDs, and capture
 timestamps remain unchanged. The first recorded original size survives later
 force recompression.
@@ -33,7 +42,11 @@ A process interruption before the database commit can leave an unreferenced
 `*.compressed-*` candidate. An interruption after commit but before deletion can
 leave an extra original. Both cases retain the referenced image. Do not delete
 files by filename pattern alone. Compare against database paths before cleaning
-orphans. No bulk orphan cleanup or live-library migration ships with this change.
+orphans. These process-interruption guarantees apply on all supported platforms.
+Python cannot fsync directory handles on Windows, so durable ordering across a
+power failure is not promised there. POSIX fsync ordering still depends on the
+filesystem and storage hardware honoring sync requests. No bulk orphan cleanup
+or live-library migration ships with this change.
 
 ## Measure your own library
 

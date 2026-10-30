@@ -137,7 +137,7 @@ class CompressionStartRequest(BaseModel):
 
     older_than_days: int | None = Field(None, ge=7, le=365)
     quality: int | None = Field(None, ge=50, le=90)
-    image_format: Literal["jpeg", "webp"] = "jpeg"
+    image_format: Literal["jpeg", "webp"] | None = None
 
 
 class CompressionStartResponse(BaseModel):
@@ -168,7 +168,7 @@ class ForceRecompressRequest(BaseModel):
 
     older_than_days: int = Field(ge=30, le=365)
     quality: int | None = Field(None, ge=50, le=90)
-    image_format: Literal["jpeg", "webp"] = "jpeg"
+    image_format: Literal["jpeg", "webp"] | None = None
     confirm: bool = False
 
 
@@ -479,6 +479,7 @@ class CompressionConfig(BaseModel):
     enabled: bool
     after_days: int
     quality: int
+    image_format: Literal["jpeg", "webp"] = "jpeg"
 
 
 class AppConfig(BaseModel):
@@ -504,6 +505,7 @@ class ConfigUpdateRequest(BaseModel):
     compression_enabled: bool | None = None
     compression_after_days: int | None = Field(None, ge=7, le=365)
     compression_quality: int | None = Field(None, ge=50, le=90)
+    compression_image_format: Literal["jpeg", "webp"] | None = None
     safe_mode_enabled: bool | None = None
     safe_mode_level: SafeModeLevel | None = None
     similarity_metric: SimilarityMetric | None = None

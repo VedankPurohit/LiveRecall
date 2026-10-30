@@ -19,6 +19,21 @@ from core.database import db
 logger = logging.getLogger(__name__)
 
 
+def _sync_directory(path: Path) -> None:
+    """Persist a new directory entry before committing its path on POSIX.
+
+    Python cannot open directory handles for fsync on Windows. There the
+    replacement protocol protects against process interruption, but does not
+    promise durable ordering across a power failure. POSIX failures propagate.
+    """
+    if os.name == "posix":
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
 @dataclass
 class CompressionProgress:
     """Progress information for compression operation"""
@@ -202,6 +217,8 @@ class CompressionService:
                 # Record the attempt so automatic compression won't retry forever.
                 db.mark_compressed(screenshot["id"], original_size)
                 return 0
+            # File fsync alone does not persist the new filename in its parent.
+            _sync_directory(image_path.parent)
             if not db.mark_compressed(
                 screenshot["id"], original_size, image_path=str(target), expected_image_path=str(image_path)
             ):

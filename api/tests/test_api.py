@@ -115,6 +115,7 @@ class TestConfigEndpoints:
         mock_config.compression.enabled = False
         mock_config.compression.after_days = 60
         mock_config.compression.quality = 85
+        mock_config.compression.image_format = "jpeg"
         mock_config.encryption_enabled = True
         mock_config.safe_mode_enabled = True
         mock_config.safe_mode_level = "mid"

@@ -80,7 +80,11 @@ def get_random_images(directory: str, count: int) -> list[Path]:
         print(f"Error: Directory not found: {directory}")
         sys.exit(1)
 
-    images = list(dir_path.glob("*.jpg")) + list(dir_path.glob("*.jpeg")) + list(dir_path.glob("*.png"))
+    images = [
+        path
+        for path in dir_path.iterdir()
+        if path.is_file() and path.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")
+    ]
     if not images:
         print(f"Error: No images found in {directory}")
         sys.exit(1)

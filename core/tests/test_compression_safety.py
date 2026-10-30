@@ -122,3 +122,83 @@ def test_recompression_preserves_original_size(mock_db, temp_dir):
         service._compress_screenshot(once, 70, force=True)
     twice = mock_db.get_screenshot(row["id"])
     assert twice["original_size_bytes"] == once["original_size_bytes"]
+
+
+def test_directory_sync_failure_prevents_database_change(mock_db, temp_dir):
+    row, path = screenshot(mock_db, temp_dir)
+    before = path.read_bytes()
+    with (
+        patch("core.compression.db", mock_db),
+        patch("core.compression._sync_directory", side_effect=OSError("directory sync failed")),
+        pytest.raises(OSError, match="directory sync failed"),
+    ):
+        CompressionService()._compress_screenshot(row, 85, image_format="webp")
+    assert path.read_bytes() == before
+    assert mock_db.get_screenshot(row["id"])["image_path"] == str(path)
+    assert not list(temp_dir.glob("*.webp"))
+
+
+def test_database_path_changes_only_after_directory_sync(mock_db, temp_dir):
+    from core.compression import _sync_directory
+
+    row, _ = screenshot(mock_db, temp_dir)
+    events = []
+    mark_compressed = mock_db.mark_compressed
+
+    def sync(path):
+        _sync_directory(path)
+        events.append("directory synced")
+
+    def mark(*args, **kwargs):
+        assert events == ["directory synced"]
+        return mark_compressed(*args, **kwargs)
+
+    with (
+        patch("core.compression.db", mock_db),
+        patch("core.compression._sync_directory", sync),
+        patch.object(mock_db, "mark_compressed", mark),
+    ):
+        CompressionService()._compress_screenshot(row, 85, image_format="webp")
+
+
+def test_timeline_and_storage_use_database_timestamp_after_conversion(mock_db, temp_dir):
+    from datetime import datetime
+
+    from api.routes.analytics import get_storage_analytics
+
+    row, _ = screenshot(mock_db, temp_dir)
+    timestamp = datetime.now().strftime("%y%m%d%H%M%S")
+    with mock_db.cursor() as cursor:
+        cursor.execute("UPDATE screenshots SET timestamp = ?", (timestamp,))
+    with patch("core.compression.db", mock_db):
+        CompressionService()._compress_screenshot(row, 85, image_format="webp")
+    updated = mock_db.get_all_screenshots()[0]
+    assert ".compressed-" in updated["image_path"]
+    assert updated["timestamp"] == timestamp
+    assert mock_db.get_date_range() == {"min_date": timestamp, "max_date": timestamp}
+    with (
+        patch("api.routes.analytics.db", mock_db),
+        patch("api.routes.analytics.get_screenshots_dir", return_value=temp_dir),
+    ):
+        storage = get_storage_analytics(days=30)
+    assert storage["largest_files"][0]["timestamp"] == timestamp
+    assert storage["largest_files"][0]["size_bytes"] == Path(updated["image_path"]).stat().st_size
+
+
+def test_clip_loader_decodes_webp_without_loading_a_model(temp_dir):
+    import numpy as np
+
+    from core.embeddings import get_image_embedding
+
+    path = temp_dir / "Snap-260101120000.compressed-test.webp"
+    Image.new("RGB", (64, 64), "white").save(path, "WEBP")
+
+    class Model:
+        def encode(self, image, **kwargs):
+            image.load()
+            assert image.format == "WEBP"
+            assert image.size == (64, 64)
+            return np.array([1.0, 0.0])
+
+    with patch("core.embeddings._load_model", return_value=Model()):
+        assert get_image_embedding(str(path)) == [1.0, 0.0]
