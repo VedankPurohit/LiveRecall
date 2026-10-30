@@ -68,6 +68,7 @@ export async function updateConfig(updates: Partial<{
   compression_enabled: boolean;
   compression_after_days: number;
   compression_quality: number;
+  compression_image_format: 'jpeg' | 'webp';
   safe_mode_enabled: boolean;
   safe_mode_level: string;
   similarity_metric: 'cosine' | 'distance';

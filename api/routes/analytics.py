@@ -108,7 +108,7 @@ def get_overview():
 
         if screenshots_dir.exists():
             for f in screenshots_dir.iterdir():
-                if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
                     size = f.stat().st_size
                     total_storage_bytes += size
                     file_sizes.append(size)
@@ -147,7 +147,7 @@ def get_storage_analytics(
         if screenshots_dir.exists():
             with contextlib.suppress(OSError):
                 for entry in screenshots_dir.iterdir():
-                    if entry.is_file() and entry.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                    if entry.is_file() and entry.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
                         file_size_map[str(entry)] = entry.stat().st_size
 
         cur.execute(
@@ -606,7 +606,7 @@ def get_quality_analytics():
     file_sizes = []
     if screenshots_dir.exists():
         for f in screenshots_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
                 file_sizes.append(f.stat().st_size)
 
     if not file_sizes:

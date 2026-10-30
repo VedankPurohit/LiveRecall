@@ -80,7 +80,6 @@ function HomeContent() {
   const [safeMode, setSafeMode] = useState(true);
   const [safeModeLevel, setSafeModeLevel] = useState<string>('mid');
   const [searchMode, setSearchMode] = useState<SearchMode>('auto');
-  const [hasTriggeredSync, setHasTriggeredSync] = useState(false);
 
   // Incognito state
   const [incognitoStatus, setIncognitoStatus] = useState<IncognitoStatus>({
@@ -458,14 +457,6 @@ function HomeContent() {
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, query, hasMoreGalleryBefore]);
-
-  // Auto-sync when user starts searching (to load model)
-  useEffect(() => {
-    if (query.trim() && !hasTriggeredSync && status?.database.unsynced && status.database.unsynced > 0) {
-      setHasTriggeredSync(true);
-      startSync().catch(console.error);
-    }
-  }, [query, hasTriggeredSync, status?.database.unsynced]);
 
   useEffect(() => {
     // Image search by screenshot ID — re-runs when any filter changes

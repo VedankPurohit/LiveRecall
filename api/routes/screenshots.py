@@ -127,7 +127,7 @@ async def get_image_by_path(
 
     return FileResponse(
         path=str(image_path),
-        media_type="image/jpeg",
+        media_type="image/webp" if image_path.suffix.lower() == ".webp" else "image/jpeg",
         filename=image_path.name,
     )
 
@@ -297,7 +297,7 @@ async def get_screenshot_image(
 
     return FileResponse(
         path=str(image_path),
-        media_type="image/jpeg",
+        media_type="image/webp" if image_path.suffix.lower() == ".webp" else "image/jpeg",
         filename=image_path.name,
     )
 
@@ -433,7 +433,7 @@ async def delete_all_screenshots(
         screenshots_dir = get_screenshots_dir()
         deleted_files = 0
         for f in screenshots_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
                 f.unlink()
                 deleted_files += 1
 

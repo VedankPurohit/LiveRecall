@@ -3,9 +3,10 @@ LiveRecall API
 FastAPI application for controlling LiveRecall
 """
 
+import asyncio
 import logging
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -15,6 +16,20 @@ from fastapi.staticfiles import StaticFiles
 
 from api.routes import analytics, compression, events, incognito, recording, screenshots, search, setup, status, sync
 from core.database import db
+
+
+async def _auto_compress():
+    """Check eligibility hourly while the API runs; honor setting changes live."""
+    from core.compression import compression_service
+    from core.config import config
+
+    while True:
+        try:
+            if config.compression.enabled and not compression_service.is_running:
+                compression_service.start(image_format=config.compression.image_format)
+        except Exception:
+            logging.getLogger(__name__).exception("Could not start automatic compression")
+        await asyncio.sleep(3600)
 
 
 def _get_static_dir() -> Path:
@@ -63,17 +78,25 @@ async def lifespan(app: FastAPI):
             # Don't crash the API if OCR migration fails - log and continue
             logging.getLogger(__name__).exception("Failed to start OCR migration: %s", e)
 
-    yield
+    compression_task = asyncio.create_task(_auto_compress())
+    try:
+        yield
+    finally:
+        compression_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await compression_task
 
     # Shutdown
     print("🛑 LiveRecall API shutting down...")
     from core.capture import capture_service
+    from core.compression import compression_service
     from core.embeddings import unload_model
     from core.processor import processor_service
     from core.text_embeddings import unload_model as unload_text_embedding_model
 
     # Stop services
     capture_service.stop()
+    compression_service.stop()
     processor_service.stop()
     unload_model()
     unload_text_embedding_model()

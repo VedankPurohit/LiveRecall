@@ -371,6 +371,21 @@ export default function SettingsPage() {
 
           {/* Storage */}
           <Section title="Storage">
+            <Row label="Compression format" value={config.compression.image_format === 'webp' ? 'WebP' : 'JPEG'}>
+              <select
+                aria-label="Compression format"
+                value={config.compression.image_format ?? 'jpeg'}
+                onChange={(event) => handleUpdate({ compression_image_format: event.target.value as 'jpeg' | 'webp' })}
+                className="bg-[#111] border border-[#333] rounded px-2 py-1 text-xs text-[#f5f5f5]"
+              >
+                <option value="jpeg">JPEG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </Row>
+            <p className="text-[11px] text-[#8a8a8a] leading-relaxed mb-3">
+              WebP usually saves more space and takes longer to compress. Both formats reduce image quality.
+              This choice applies to automatic and manual compression. Already compressed images are skipped unless you force recompression.
+            </p>
             <Row label="Auto-compress" value={config.compression.enabled ? 'On' : 'Off'}>
               <Toggle
                 enabled={config.compression.enabled}
@@ -450,6 +465,7 @@ export default function SettingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="bg-[#111] border border-[#1e1e1e] rounded-lg w-80 p-5">
             <h3 className="text-sm font-medium text-[#f5f5f5] mb-4">Force Recompress</h3>
+            <p className="text-xs text-[#8a8a8a] mb-4">Format: {config.compression.image_format === 'webp' ? 'WebP' : 'JPEG'}</p>
 
             <div className="mb-4">
               <label className="text-xs text-[#555] mb-1.5 block">Older than</label>

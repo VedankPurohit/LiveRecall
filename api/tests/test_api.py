@@ -115,6 +115,7 @@ class TestConfigEndpoints:
         mock_config.compression.enabled = False
         mock_config.compression.after_days = 60
         mock_config.compression.quality = 85
+        mock_config.compression.image_format = "jpeg"
         mock_config.encryption_enabled = True
         mock_config.safe_mode_enabled = True
         mock_config.safe_mode_level = "mid"
@@ -479,7 +480,7 @@ class TestSearchEndpoints:
         app.include_router(router)  # Router already has /search prefix
         client = TestClient(app)
 
-        response = client.post("/search", json={"query": "test"})
+        response = client.post("/search", json={"query": "test", "search_mode": "image"})
         assert response.status_code == 400
         assert "No synced screenshots" in response.json()["detail"]
 

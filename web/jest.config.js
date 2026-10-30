@@ -8,7 +8,7 @@ const config = {
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/'],
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
-      tsconfig: 'tsconfig.json',
+      tsconfig: { jsx: 'react-jsx' },
     }],
   },
   collectCoverageFrom: [

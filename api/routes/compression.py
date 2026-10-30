@@ -47,14 +47,15 @@ async def start_compression(request: CompressionStartRequest = None):
     Start compressing old screenshots.
 
     Compresses screenshots older than the specified days (default: 60)
-    to a lower quality (default: 85) to save storage space.
+    to a lower quality to save storage space. Set image_format="webp" to opt
+    into WebP encoding. JPEG remains the default.
 
     This runs in the background - use /compression/status to monitor progress.
 
     Important:
     - Already compressed screenshots are skipped (no re-compression)
     - Embeddings are not affected (search still works)
-    - Original files are overwritten (not reversible)
+    - Only smaller encodings replace originals. Lossy compression is not reversible.
     """
     if compression_service.is_running:
         return CompressionStartResponse(
@@ -81,6 +82,7 @@ async def start_compression(request: CompressionStartRequest = None):
     compression_service.start(
         older_than_days=older_than_days,
         quality=quality,
+        image_format=(request.image_format if request else None) or config.compression.image_format,
     )
 
     return CompressionStartResponse(
@@ -185,6 +187,7 @@ async def start_force_recompress(request: ForceRecompressRequest):
     started = compression_service.start_force_recompress(
         older_than_days=request.older_than_days,
         quality=request.quality,
+        image_format=request.image_format or config.compression.image_format,
     )
 
     if not started:

@@ -117,6 +117,7 @@ async def get_config():
             enabled=config.compression.enabled,
             after_days=config.compression.after_days,
             quality=config.compression.quality,
+            image_format=config.compression.image_format,
         ),
         encryption_enabled=config.encryption_enabled,
         safe_mode_enabled=config.safe_mode_enabled,
@@ -174,6 +175,10 @@ async def update_config(request: ConfigUpdateRequest):
     if request.compression_quality is not None:
         config.compression.quality = request.compression_quality
         updated.append(f"compression_quality={request.compression_quality}")
+
+    if request.compression_image_format is not None:
+        config.compression.image_format = request.compression_image_format
+        updated.append(f"compression_image_format={request.compression_image_format}")
 
     if request.similarity_metric is not None:
         config.similarity_metric = request.similarity_metric.value

@@ -103,6 +103,31 @@ class TestCompressionSettings:
         assert settings.enabled is False  # Off by default
         assert settings.after_days == 60
         assert settings.quality == 75
+        assert settings.image_format == "jpeg"
+
+    def test_format_survives_save_and_reload(self, temp_dir, monkeypatch):
+        from core.config import Config
+
+        monkeypatch.setattr("core.config.get_config_path", lambda: temp_dir / "config.json")
+        config = Config()
+        config.compression.image_format = "webp"
+        config.save()
+        loaded = Config()
+        loaded.load()
+        assert loaded.compression.image_format == "webp"
+
+    def test_legacy_or_invalid_format_uses_jpeg(self, temp_dir, monkeypatch):
+        import json
+
+        from core.config import Config
+
+        path = temp_dir / "config.json"
+        monkeypatch.setattr("core.config.get_config_path", lambda: path)
+        for compression in ({"enabled": True}, {"image_format": "unknown"}):
+            path.write_text(json.dumps({"compression": compression}))
+            loaded = Config()
+            loaded.load()
+            assert loaded.compression.image_format == "jpeg"
 
     def test_quality_range(self):
         """Quality should be reasonable"""
