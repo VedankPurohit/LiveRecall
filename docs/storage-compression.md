@@ -73,6 +73,14 @@ build without additional dependencies. Video/delta storage could exploit changes
 between adjacent screenshots, but needs indexed segments, random-frame retrieval,
 recoverable writes, and new backup/export behavior. It is a separate storage design.
 
+## Retained text search
+
+Archiving older history can remove every CLIP image vector while leaving newer
+OCR, FTS and text vectors intact. Text-only search no longer requires an image
+vector. Auto search uses the available text indexes when the image index is
+empty, without loading CLIP. Explicit image search still asks the user to sync
+image embeddings first. This does not recompute or rewrite retained history.
+
 ## External disks
 
 The current app stores absolute screenshot paths in SQLite. Moving the whole data

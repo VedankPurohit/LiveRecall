@@ -50,9 +50,11 @@ async def search_screenshots(request: SearchRequest):
     - "error: connection refused" (text search)
     - "video call with team" (hybrid search)
     """
-    # Check if we have any synced screenshots
+    # Text/OCR history survives archiving older images and their CLIP vectors.
+    # Only an explicit image search requires at least one image embedding.
     stats = db.get_stats()
-    if stats["synced"] == 0:
+    requires_image_index = request.image is not None or request.search_mode == SearchMode.IMAGE
+    if requires_image_index and stats["synced"] == 0:
         raise HTTPException(
             status_code=400,
             detail="No synced screenshots. Run sync first to generate embeddings.",
@@ -95,7 +97,7 @@ async def search_screenshots(request: SearchRequest):
                 raise HTTPException(status_code=400, detail=f"Failed to process image: {e}") from e
 
     try:
-        if request.image is None and request.search_mode in (SearchMode.AUTO, SearchMode.IMAGE):
+        if request.image is None and request.search_mode in (SearchMode.AUTO, SearchMode.IMAGE) and stats["synced"] > 0:
             # CLIP image embedding (for image and auto modes)
             if request.safe_mode:
                 image_embedding = get_safe_search_embedding(

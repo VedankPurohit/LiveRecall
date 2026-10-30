@@ -480,7 +480,7 @@ class TestSearchEndpoints:
         app.include_router(router)  # Router already has /search prefix
         client = TestClient(app)
 
-        response = client.post("/search", json={"query": "test"})
+        response = client.post("/search", json={"query": "test", "search_mode": "image"})
         assert response.status_code == 400
         assert "No synced screenshots" in response.json()["detail"]
 
