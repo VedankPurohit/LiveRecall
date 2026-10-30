@@ -688,22 +688,25 @@ class Database:
 
     # --- Compression operations ---
 
-    def get_compressible_screenshots(self, older_than_days: int, limit: int | None = None) -> list[dict]:
+    def get_compressible_screenshots(
+        self, older_than_days: int, limit: int | None = None, after_id: int = 0
+    ) -> list[dict]:
         """Get screenshots eligible for compression (old + not compressed)"""
         with self.cursor() as cur:
             query = """
                 SELECT * FROM screenshots
                 WHERE is_compressed = 0
                 AND created_at < datetime('now', ?)
-                ORDER BY created_at ASC
+                AND id > ?
+                ORDER BY id ASC
             """
             days_ago = f"-{older_than_days} days"
 
             if limit:
                 query += " LIMIT ?"
-                cur.execute(query, (days_ago, limit))
+                cur.execute(query, (days_ago, after_id, limit))
             else:
-                cur.execute(query, (days_ago,))
+                cur.execute(query, (days_ago, after_id))
 
             return [dict(row) for row in cur.fetchall()]
 
@@ -765,6 +768,8 @@ class Database:
         self,
         screenshot_id: int,
         original_size: int,
+        image_path: str | None = None,
+        expected_image_path: str | None = None,
     ) -> bool:
         """Mark a screenshot as compressed"""
         with self.cursor() as cur:
@@ -772,11 +777,13 @@ class Database:
                 """
                 UPDATE screenshots
                 SET is_compressed = 1,
-                    original_size_bytes = ?,
-                    compressed_at = CURRENT_TIMESTAMP
+                    original_size_bytes = COALESCE(original_size_bytes, ?),
+                    compressed_at = CURRENT_TIMESTAMP,
+                    image_path = COALESCE(?, image_path)
                 WHERE id = ?
+                  AND (? IS NULL OR image_path = ?)
             """,
-                (original_size, screenshot_id),
+                (original_size, image_path, screenshot_id, expected_image_path, expected_image_path),
             )
             return cur.rowcount > 0
 

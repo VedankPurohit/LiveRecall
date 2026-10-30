@@ -4,6 +4,7 @@ Pydantic models for request/response validation
 """
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -136,6 +137,7 @@ class CompressionStartRequest(BaseModel):
 
     older_than_days: int | None = Field(None, ge=7, le=365)
     quality: int | None = Field(None, ge=50, le=90)
+    image_format: Literal["jpeg", "webp"] = "jpeg"
 
 
 class CompressionStartResponse(BaseModel):
@@ -166,6 +168,7 @@ class ForceRecompressRequest(BaseModel):
 
     older_than_days: int = Field(ge=30, le=365)
     quality: int | None = Field(None, ge=50, le=90)
+    image_format: Literal["jpeg", "webp"] = "jpeg"
     confirm: bool = False
 
 
