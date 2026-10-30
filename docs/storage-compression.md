@@ -80,6 +80,9 @@ OCR, FTS and text vectors intact. Text-only search no longer requires an image
 vector. Auto search uses the available text indexes when the image index is
 empty, without loading CLIP. Explicit image search still asks the user to sync
 image embeddings first. This does not recompute or rewrite retained history.
+Typing a query no longer starts a bulk sync. Sync remains available through
+the existing explicit controls, so searching retained text does not process an
+entire unsynced image library in the background.
 
 ## External disks
 
